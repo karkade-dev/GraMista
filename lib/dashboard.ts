@@ -5,7 +5,7 @@ import { collectionSummary, getActiveCollection } from './collections';
 import { mapPoints, type MapPoint } from './map';
 import { createdAtWhere, windowFor, type PeriodWindow } from './period';
 import { anonymize } from './anonymize';
-import { commentForDisplay, toCommentMode, type CommentSettings } from './censor';
+import { censorText, commentForDisplay, toCommentMode, type CommentSettings } from './censor';
 import { cityOpeners, openerKey } from './newCity';
 
 export interface RecentItem {
@@ -20,6 +20,8 @@ export interface RecentItem {
   collectionId: string | null;
   /** Донат-відкривач: дав місту ПЕРШИЙ бал у межах збору (обчислюється з PointEvent). */
   newCity: boolean;
+  /** Закордонне місто (country !== 'UA') — для мітки 🌍 у стрічці. */
+  abroad: boolean;
 }
 
 /**
@@ -48,6 +50,12 @@ export interface DashboardState {
   /** Глобальний тумблер «битва міст»: коли false — нові донати лише гроші, без балів. */
   cityBattle: boolean;
   leaderboard: LeaderRow[];
+  /** Окремий топ закордонних міст — лише в режимі 'separate' (інакше undefined). */
+  leaderboardAbroad?: LeaderRow[];
+  /** Режим закордону для рендеру списків: 'off' | 'shared' | 'separate'. */
+  abroadMode: 'off' | 'shared' | 'separate';
+  /** Чи показувати на мапі шар кордонів світу (керує стрімер через abroadWorldMap). */
+  abroadWorldMap: boolean;
   recent: RecentItem[];
   map: MapPoint[];
 }
@@ -61,7 +69,7 @@ export interface HeaderState {
   cityBattle: boolean;
   /** Кількість донатів за весь час. */
   donationCount: number;
-  /** Прогрес активного збору (найновішого зі status='active') — для плашки в шапці; null, якщо нема. goalUah null — збір без цілі. */
+  /** Прогрес активного збору (найновішого зі status='active') — для плашки в шапці; null, якщо нема. goalUah null — збір без цілі. raisedUah/percent тут показові (з урахуванням стартової суми). */
   activeCollection: { name: string; raisedUah: number; goalUah: number | null; percent: number } | null;
   /**
    * Сума й к-сть донатів за кожен період — щоб шапка показувала те саме число, що й дашборд
@@ -232,7 +240,8 @@ export async function getHeader(db: PrismaClient, userId: string): Promise<Heade
     totalRaisedUah: allT.sumUah,
     cityBattle: user?.cityBattle ?? true,
     donationCount: allT.count,
-    activeCollection: cs ? { name: cs.name, raisedUah: cs.raisedUah, goalUah: cs.goalUah, percent: cs.percent } : null,
+    // Плашка показує «накопичено» з урахуванням стартової суми (displayed); periodTotals.collection нижче лишається реальним.
+    activeCollection: cs ? { name: cs.name, raisedUah: cs.displayedUah, goalUah: cs.goalUah, percent: cs.displayedPercent } : null,
     periodTotals: { all: allT, week: weekT, month: monthT, stream: streamT, collection: collectionT },
   };
 }
@@ -247,16 +256,23 @@ export async function getState(
   db: PrismaClient,
   userId: string,
   window: PeriodWindow = {},
-  opts: { streamId?: string; collectionId?: string } = {},
+  opts: { streamId?: string; collectionId?: string; audience?: 'admin' | 'viewer' } = {},
 ): Promise<DashboardState> {
   const open = await db.stream.findFirst({ where: { userId, endedAt: null }, orderBy: { startedAt: 'desc' } });
   const activeStream = open ? await streamSummary(db, userId, open) : null;
 
   const user = await db.user.findUnique({
     where: { id: userId },
-    select: { cityBattle: true, commentMode: true, bannedWordsAdded: true, bannedWordsAllowed: true },
+    select: { cityBattle: true, commentMode: true, bannedWordsAdded: true, bannedWordsAllowed: true, abroadCities: true, abroadWorldMap: true, abroadTopMode: true },
   });
   const cityBattle = user?.cityBattle ?? true;
+  const abroadCities = user?.abroadCities ?? false;
+  const abroadWorldMap = user?.abroadWorldMap ?? false;
+  const abroadMode: 'off' | 'shared' | 'separate' = !abroadCities
+    ? 'off'
+    : user?.abroadTopMode === 'shared'
+      ? 'shared'
+      : 'separate';
   // Коментар чиститься ТУТ (єдине місце) — на клієнти (оверлеї/публічна/панель) сирий мат
   // не потрапляє. Адмінська історія /donations — окремий шлях (lib/donations), лишається сирою.
   const comments: CommentSettings = {
@@ -276,17 +292,22 @@ export async function getState(
   const totals = await db.donation.aggregate({ where: donWhere, _sum: { amount: true } });
   const totalRaisedUah = totals._sum.amount?.toNumber() ?? 0;
 
-  const lb = opts.streamId
-    ? await leaderboard(db, userId, { streamIds: [opts.streamId], limit: 20 })
+  const baseLb = opts.streamId
+    ? { streamIds: [opts.streamId] }
     : opts.collectionId
-      ? await leaderboard(db, userId, { collectionId: opts.collectionId, limit: 20 })
-      : await leaderboard(db, userId, { ...window, limit: 20 });
+      ? { collectionId: opts.collectionId }
+      : { ...window };
+  // shared → один рейтинг (UA+світ); off/separate → основний лише UA, окремий список — лише в separate.
+  const lb = await leaderboard(db, userId, { ...baseLb, limit: 20, country: abroadMode === 'shared' ? undefined : 'ua' });
+  const leaderboardAbroad = abroadMode === 'separate'
+    ? await leaderboard(db, userId, { ...baseLb, limit: 20, country: 'abroad' })
+    : undefined;
 
   const rows = await db.donation.findMany({
     where: donWhere,
     orderBy: { createdAt: 'desc' },
     take: 30,
-    include: { settlement: { select: { name: true } } },
+    include: { settlement: { select: { name: true, country: true } } },
   });
   const openers = await cityOpeners(
     db,
@@ -295,19 +316,30 @@ export async function getState(
       .filter((d) => d.settlementId !== null)
       .map((d) => ({ settlementId: d.settlementId!, collectionId: d.collectionId })),
   );
+  // Дашборд (audience 'admin') — приватний робочий екран стрімера: коментар видно ЗАВЖДИ,
+  // лише з маскуванням мату. Глядацькі режими city/hide ховають коментар від ГЛЯДАЧІВ, а не
+  // від стрімера — інакше він не бачив би, що пишуть, і не міг призначити місто, якого не вгадали.
+  const adminView = opts.audience === 'admin';
   const recent: RecentItem[] = rows.map((d) => ({
     externalId: d.externalId,
     who: anonymize(d.donorName) || '(без імені)',
     amountUah: d.amount.toNumber(),
-    message: commentForDisplay(d.message, d.settlement?.name ?? null, comments),
+    message: adminView
+      ? censorText(d.message, { mode: 'mask', added: comments.added, allowed: comments.allowed }).trim()
+      : commentForDisplay(d.message, d.settlement?.name ?? null, comments),
     city: d.settlement?.name ?? null,
     points: d.pointsAwarded.toNumber(),
     at: d.createdAt.getTime(),
     collectionId: d.collectionId,
     newCity: d.settlementId !== null && openers.get(openerKey(d.settlementId, d.collectionId)) === d.id,
+    abroad: d.settlement != null && d.settlement.country !== 'UA',
   }));
 
-  const map = await mapPoints(db, userId, window, opts);
+  const map = await mapPoints(db, userId, window, {
+    streamId: opts.streamId,
+    collectionId: opts.collectionId,
+    includeAbroad: abroadWorldMap,
+  });
 
-  return { activeStream, totalRaisedUah, cityBattle, leaderboard: lb, recent, map };
+  return { activeStream, totalRaisedUah, cityBattle, leaderboard: lb, leaderboardAbroad, abroadMode, abroadWorldMap, recent, map };
 }

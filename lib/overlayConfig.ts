@@ -17,6 +17,8 @@ export interface OverlayConfig {
   title: boolean;
   /** Показувати коментар донату (feed/alert); вимикається в конструкторі (&comment=0). */
   comment: boolean;
+  /** Топ міст: 'ua' (лише Україна, дефолт) | 'abroad' (лише закордон) | 'both' (разом). */
+  scope: 'ua' | 'abroad' | 'both';
   live: boolean; // живе SSE-оновлення; false у прев'ю конструктора (preview=1), щоб не плодити з'єднань
 }
 
@@ -51,6 +53,7 @@ export function parseOverlayConfig(q: Query, defaults: OverlayDefaults = {}): Ov
     chroma: oneOf(q.chroma, ['none', 'green', 'blue', 'magenta'] as const, 'none'),
     title: one(q.title) !== '0',
     comment: one(q.comment) !== '0',
+    scope: oneOf(q.scope, ['ua', 'abroad', 'both'] as const, 'ua'),
     live: one(q.preview) !== '1',
   };
 }

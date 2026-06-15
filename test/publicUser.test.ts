@@ -1,7 +1,10 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { testDb } from './db';
-import { userIdByOverlayKey, userIdByHandle, ensureOverlayKey, regenerateOverlayKey } from '../lib/publicUser';
+import {
+  userIdByOverlayKey, userIdByHandle, ensureOverlayKey, regenerateOverlayKey,
+  userIdByDockKey, ensureDockKey, regenerateDockKey,
+} from '../lib/publicUser';
 
 before(async () => {
   await testDb.user.upsert({
@@ -35,4 +38,28 @@ test('ensureOverlayKey повертає наявний, не перезапис�
   const k1 = await ensureOverlayKey(testDb, 'pu-user');
   const k2 = await ensureOverlayKey(testDb, 'pu-user');
   assert.equal(k1, k2);
+});
+
+test('ensureDockKey створює ключ, окремий від overlayKey; повторний — той самий', async () => {
+  const dk1 = await ensureDockKey(testDb, 'pu-user');
+  assert.ok(dk1 && dk1.length > 10);
+  const dk2 = await ensureDockKey(testDb, 'pu-user');
+  assert.equal(dk1, dk2); // не перезаписує
+  const overlay = await ensureOverlayKey(testDb, 'pu-user');
+  assert.notEqual(dk1, overlay); // окремий ключ
+});
+
+test('userIdByDockKey резолвить за токеном; невідомий/порожній → null', async () => {
+  const dk = await ensureDockKey(testDb, 'pu-user');
+  assert.equal(await userIdByDockKey(testDb, dk), 'pu-user');
+  assert.equal(await userIdByDockKey(testDb, 'NOPE'), null);
+  assert.equal(await userIdByDockKey(testDb, ''), null);
+});
+
+test('regenerateDockKey міняє ключ; старий більше не резолвиться', async () => {
+  const old = await ensureDockKey(testDb, 'pu-user');
+  const fresh = await regenerateDockKey(testDb, 'pu-user');
+  assert.notEqual(fresh, old);
+  assert.equal(await userIdByDockKey(testDb, old), null);
+  assert.equal(await userIdByDockKey(testDb, fresh), 'pu-user');
 });

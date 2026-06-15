@@ -18,6 +18,7 @@ export default async function TopOverlay({ searchParams }: { searchParams: SP })
   if (!U) return <div className="ov-empty">Силку оверлея не розпізнано. Відкрий «Оверлеї» в панелі й скопіюй свіже посилання.</div>;
   const cfg = parseOverlayConfig(sp, { period: 'all', rows: 5 });
   const asc = cfg.sort === 'asc';
+  const country = cfg.scope === 'both' ? undefined : cfg.scope; // 'ua' | 'abroad' | undefined
 
   let rows;
   if (cfg.period === 'stream') {
@@ -26,12 +27,12 @@ export default async function TopOverlay({ searchParams }: { searchParams: SP })
       orderBy: { startedAt: 'desc' },
       select: { id: true },
     });
-    rows = await leaderboard(prisma, U, s ? { streamIds: [s.id], limit: cfg.rows, asc } : { limit: cfg.rows, asc });
+    rows = await leaderboard(prisma, U, s ? { streamIds: [s.id], limit: cfg.rows, asc, country } : { limit: cfg.rows, asc, country });
   } else if (cfg.period === 'collection') {
     const col = await getActiveCollection(prisma, U);
-    rows = await leaderboard(prisma, U, col ? { collectionId: col.id, limit: cfg.rows, asc } : { limit: cfg.rows, asc });
+    rows = await leaderboard(prisma, U, col ? { collectionId: col.id, limit: cfg.rows, asc, country } : { limit: cfg.rows, asc, country });
   } else {
-    rows = await leaderboard(prisma, U, { ...windowFor(cfg.period as Range), limit: cfg.rows, asc });
+    rows = await leaderboard(prisma, U, { ...windowFor(cfg.period as Range), limit: cfg.rows, asc, country });
   }
   const maxPts = rows.reduce((m, c) => Math.max(m, c.points), 1);
 

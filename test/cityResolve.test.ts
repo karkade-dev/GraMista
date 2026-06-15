@@ -67,6 +67,33 @@ test('тезки: підказка області в коментарі пере
   }
 });
 
+test('уточнювач-«де» (обл. центр) не перемагає мале місто в тій самій області', async () => {
+  await testDb.settlement.createMany({
+    data: [
+      { id: 'tmp-cr-dol', name: 'Долина', nameNorm: 'долина', oblast: 'Івано-Франківська', population: 20000 },
+      { id: 'tmp-cr-nbr', name: 'Нижній Березів', nameNorm: 'нижній березів', oblast: 'Івано-Франківська', population: 1500 },
+    ],
+  });
+  // Відтворюємо прод: VESUM-аліас «івано франківська» — відмінок міста, що збігається з прикметником
+  // області. Саме він матчив Івано-Франківськ у реальних коментарях і «з'їдав» мале місто.
+  await testDb.settlementAlias.create({
+    data: { settlementId: 'ivano-frankivsk', alias: 'Івано-Франківська', aliasNorm: 'івано франківська', source: 'vesum' },
+  });
+  try {
+    // голою назвою центру
+    assert.equal((await resolveCity(testDb, 'Долина Івано-Франківськ'))?.settlementId, 'tmp-cr-dol');
+    // реальні коментарі з прода (прикметник + «область»)
+    assert.equal((await resolveCity(testDb, 'Долина, Івано-Франківська область, Калуський район'))?.settlementId, 'tmp-cr-dol');
+    assert.equal((await resolveCity(testDb, 'Нижній Березів, Івано-франківська область'))?.settlementId, 'tmp-cr-nbr');
+    // а коли названо ЛИШЕ центр — він і резолвиться (fallback, поведінку не ламаємо)
+    assert.equal((await resolveCity(testDb, 'Івано-Франківськ форева'))?.settlementId, 'ivano-frankivsk');
+    assert.equal((await resolveCity(testDb, 'З Івано-Франківська вітання'))?.settlementId, 'ivano-frankivsk');
+  } finally {
+    await testDb.settlementAlias.deleteMany({ where: { settlementId: 'ivano-frankivsk', aliasNorm: 'івано франківська' } });
+    await testDb.settlement.deleteMany({ where: { id: { startsWith: 'tmp-cr-' } } });
+  }
+});
+
 test('fuzzy НЕ дає бали селам за звичайні слова коментаря (хибні збіги на повній базі)', async () => {
   // Реальний кейс із повного датасету: «просто» схоже на село «Просторе» (similarity 0.6),
   // «привіт» — на «Привітне». Поріг 0.55 + різниця довжин ≤1 мусять це відсікати.

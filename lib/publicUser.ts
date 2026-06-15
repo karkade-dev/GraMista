@@ -34,3 +34,26 @@ export async function regenerateOverlayKey(db: PrismaClient, userId: string): Pr
   await db.user.update({ where: { id: userId }, data: { overlayKey } });
   return overlayKey;
 }
+
+// — Донат-док (/dock): окремий capability-ключ, дзеркало overlayKey. Окремий від overlayKey,
+// бо док показує повні імена + сирі коментарі (PII), а overlayKey — «лише публічні дані». —
+
+export async function userIdByDockKey(db: PrismaClient, key: string): Promise<string | null> {
+  if (!key) return null;
+  const u = await db.user.findUnique({ where: { dockKey: key }, select: { id: true } });
+  return u?.id ?? null;
+}
+
+export async function ensureDockKey(db: PrismaClient, userId: string): Promise<string> {
+  const u = await db.user.findUnique({ where: { id: userId }, select: { dockKey: true } });
+  if (u?.dockKey) return u.dockKey;
+  const dockKey = generateOverlayKey();
+  await db.user.update({ where: { id: userId }, data: { dockKey } });
+  return dockKey;
+}
+
+export async function regenerateDockKey(db: PrismaClient, userId: string): Promise<string> {
+  const dockKey = generateOverlayKey();
+  await db.user.update({ where: { id: userId }, data: { dockKey } });
+  return dockKey;
+}

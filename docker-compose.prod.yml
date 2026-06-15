@@ -34,6 +34,7 @@ services:
       BETTER_AUTH_URL: ${APP_BASE_URL}
       APP_BASE_URL: ${APP_BASE_URL}
       RESEND_API_KEY: ${RESEND_API_KEY}
+      EMAIL_FROM: ${EMAIL_FROM}
       # Закрита програма (персональне API mono без провайдерського доступу) — реєстрація
       # лише за особистим запрошенням; деталі lib/signups.ts.
       SIGNUPS_CLOSED: "1"

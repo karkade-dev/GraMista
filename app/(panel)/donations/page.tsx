@@ -13,6 +13,8 @@ import {
   type DonationSort,
 } from '@/lib/donations';
 import { formatUah, formatPoints, formatDateTime, initial } from '@/lib/format';
+import { ensureDockKey } from '@/lib/publicUser';
+import { OpenDockButton } from '@/app/OpenDockButton';
 import { CityAutocomplete } from '@/app/CityAutocomplete';
 import { ReassignCityCell } from '@/app/ReassignCityCell';
 import { StreamPicker } from '@/app/StreamPicker';
@@ -32,10 +34,11 @@ export default async function DonationsPage({ searchParams }: { searchParams: Pr
   const cursor = parseCursor(sp.cursor);
   const nav = sp.nav === 'prev' ? 'prev' : 'next';
 
-  const [page, cities, streams] = await Promise.all([
+  const [page, cities, streams, dockKey] = await Promise.all([
     listDonations(prisma, U, filter, { cursor, nav, sort, dir }),
     listDonationCities(prisma, U),
     prisma.stream.findMany({ where: { userId: U }, select: { id: true, name: true }, orderBy: { startedAt: 'desc' } }),
+    ensureDockKey(prisma, U),
   ]);
 
   // Поточні фільтри (без сортування/курсора) — основа для всіх лінків
@@ -79,9 +82,12 @@ export default async function DonationsPage({ searchParams }: { searchParams: Pr
           <div className="card-title">
             <span className="ic">💛</span> Історія донатів
           </div>
-          <a href={exportHref} className="btn-csv" download>
-            ⬇ Експорт CSV
-          </a>
+          <div className="card-actions">
+            <OpenDockButton dockKey={dockKey} />
+            <a href={exportHref} className="btn-csv" download>
+              ⬇ Експорт CSV
+            </a>
+          </div>
         </div>
 
         <form className="don-filters" action="/donations" method="get">
@@ -208,7 +214,11 @@ export default async function DonationsPage({ searchParams }: { searchParams: Pr
                       )}
                     </td>
                     <td>
+                      {/* key ремонтить пікер на серверне значення після збереження: без нього
+                          неконтрольований <select> лишається на старому після server-action і
+                          візуально «скидається» на «без стріму», хоч у БД уже збережено (як ReassignCityCell). */}
                       <StreamPicker
+                        key={d.streamId ?? 'none'}
                         action={moveDonationAction}
                         externalId={d.externalId}
                         streams={streams}

@@ -16,9 +16,14 @@ export async function processDonation(
   userId: string,
   d: DonationInput,
 ): Promise<ProcessResult> {
-  const settlementId = (await resolveCity(db, d.message))?.settlementId ?? null;
-  // Тумблер «битва міст»: коли вимкнено — донат лише як гроші, без балів.
-  const user = await db.user.findUnique({ where: { id: userId }, select: { cityBattle: true } });
+  // Тумблер «битва міст» + опції закордону читаємо разом (один запит).
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { cityBattle: true, abroadCities: true, abroadHideAggressor: true },
+  });
+  const settlementId =
+    (await resolveCity(db, d.message, { abroad: user?.abroadCities ?? false, hideAggressor: user?.abroadHideAggressor ?? false }))
+      ?.settlementId ?? null;
   const awardPoints = user?.cityBattle ?? true;
   const active = await db.stream.findFirst({
     where: { userId, endedAt: null },

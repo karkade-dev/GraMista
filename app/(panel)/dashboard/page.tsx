@@ -6,7 +6,7 @@ import { getState, dashboardTiles, biggestRecentId } from '@/lib/dashboard';
 import { leaderboard } from '@/lib/leaderboard';
 import { getActiveCollection, listCollectionOptions } from '@/lib/collections';
 import { parseRange, windowFor, createdAtWhere, type Range } from '@/lib/period';
-import { formatUah, formatPoints, pluralBaliv, pluralMist, initial } from '@/lib/format';
+import { formatUah, formatPoints, pluralBaliv, pluralMist, initial, oneLineComment } from '@/lib/format';
 import { AllCities } from '@/app/AllCities';
 import { CopyButton } from '@/app/CopyButton';
 import { MapUkraine } from '@/app/MapUkraine';
@@ -78,7 +78,7 @@ export default async function Dashboard({
       : { ...window, limit: 500, asc };
 
   const [state, cities, donationCount, tiles, collectionOptions, profile, monoSource] = await Promise.all([
-    getState(prisma, U, window, { streamId, collectionId }),
+    getState(prisma, U, window, { streamId, collectionId, audience: 'admin' }),
     leaderboard(prisma, U, lbFilter),
     prisma.donation.count({ where: donWhere }),
     dashboardTiles(prisma, U),
@@ -102,6 +102,11 @@ export default async function Dashboard({
   // Максимум балів — для ширини смужок; беремо з усіх міст, щоб смужки лишались
   // осмисленими і при сортуванні «менші зверху».
   const maxPts = cities.reduce((m, c) => Math.max(m, c.points), 1);
+
+  // Окремий топ «Світ / Діаспора» — лише в режимі 'separate' (getState віддає закордонні
+  // міста окремим списком). У режимах 'off'/'shared' секції немає — топ єдиний, як було.
+  const abroadTop = state.abroadMode === 'separate' ? (state.leaderboardAbroad ?? []) : [];
+  const abroadMaxPts = abroadTop.reduce((m, c) => Math.max(m, c.points), 1);
 
   // Виділяємо найбільший донат у стрічці (лише коли є що порівнювати — від 2 донатів).
   const biggestId = state.recent.length >= 2 ? biggestRecentId(state.recent) : null;
@@ -222,12 +227,41 @@ export default async function Dashboard({
             )}
           </div>
         </section>
+
+        {abroadTop.length > 0 && (
+          <section className="card fill">
+            <div className="card-head">
+              <div className="card-title">
+                <span className="ic">🌍</span> Світ / Діаспора
+              </div>
+              <span className="card-hint">1 бал = 100 ₴</span>
+            </div>
+            <div className="top-list scroll">
+              {abroadTop.slice(0, 10).map((c, i) => {
+                const rank = i + 1;
+                const medal = rank <= 3 ? ` medal r${rank}` : '';
+                return (
+                  <Link className={`row${medal}`} key={c.settlementId} href={`/city/${c.settlementId}`}>
+                    <div className="rank">{rank}</div>
+                    <div className="city">{c.name}</div>
+                    <div className="pts">
+                      {formatPoints(c.points)} <em>{pluralBaliv(c.points)}</em>
+                    </div>
+                    <div className="bar">
+                      <i style={{ width: `${Math.max(4, (c.points / abroadMaxPts) * 100)}%` }} />
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        )}
       </div>
 
       {/* ЦЕНТР: мапа + усі міста */}
       <div className="column">
         <section className="card map-card">
-          <MapUkraine points={state.map} initialLabels="all" />
+          <MapUkraine points={state.map} initialLabels="all" world={state.abroadWorldMap} />
           <div className="map-foot">
             <span className="legend">
               <span className="lg big">
@@ -288,6 +322,7 @@ export default async function Dashboard({
                         </span>
                         <span className="d-sum">+{formatUah(d.amountUah)}</span>
                       </div>
+                      {d.message && <div className="d-comment">«{oneLineComment(d.message)}»</div>}
                       <div className="d-meta">
                         {d.city ? (
                           <ReassignCityCell
@@ -312,7 +347,8 @@ export default async function Dashboard({
                           <summary>🎯 {collectionOptions.find((o) => o.id === d.collectionId)?.name ?? 'поза збором'}</summary>
                           <form action={moveDonationToCollectionAction} className="inline-assign">
                             <input type="hidden" name="externalId" value={d.externalId} />
-                            <select name="collectionId" defaultValue={d.collectionId ?? ''} className="fld">
+                            {/* key: пікер перемонтовується на серверне значення після збереження (як StreamPicker) */}
+                            <select key={d.collectionId ?? 'none'} name="collectionId" defaultValue={d.collectionId ?? ''} className="fld">
                               <option value="">— поза збором —</option>
                               {collectionOptions.map((o) => (
                                 <option key={o.id} value={o.id}>{o.name}</option>
@@ -322,6 +358,7 @@ export default async function Dashboard({
                           </form>
                         </details>
                       )}
+                      {d.abroad && <span className="badge abroad">🌍 закордон</span>}
                       {d.newCity && <span className="badge newcity">🆕 нове місто на мапі</span>}
                       {badge}
                     </div>

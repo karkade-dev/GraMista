@@ -23,6 +23,9 @@ const MAX_FUZZY_QS = 24;
 /** Скільки fuzzy-кандидатів дістаємо з БД (топ-1 може програти підказці області). */
 const FUZZY_CANDIDATES = 5;
 
+/** Країни-агресори — виключаються з пулу, коли стрімер увімкнув відповідну опцію. */
+const AGGRESSOR = ['RU', 'BY'];
+
 // Підказка області в коментарі («Іванівка Сумська», «з Іванівки на Сумщині») — розвʼязує тезок.
 // Стеми нормалізовані; перевірка — слово починається зі стема. Хибна підказка НЕшкідлива:
 // вона лише фільтрує вже знайдених кандидатів і ніколи не додає нових (нема тезок — нема ефекту).
@@ -106,26 +109,34 @@ function detectOblastHints(words: string[]): Set<string> {
   return hints;
 }
 
-type Cand = { id: string; name: string; form: string; population: number; oblast: string | null };
+type Cand = { id: string; name: string; form: string; population: number; oblast: string | null; country: string };
+
+/** Кращий кандидат: Україна перемагає закордон → довша форма → більше населення → id (детермінізм). */
+function better(c: Cand, best: Cand): boolean {
+  const cua = c.country === 'UA';
+  const bua = best.country === 'UA';
+  if (cua !== bua) return cua;
+  if (c.form.length !== best.form.length) return c.form.length > best.form.length;
+  if (c.population !== best.population) return c.population > best.population;
+  return c.id < best.id;
+}
 
 /**
- * Тай-брейк точного збігу: підказка області (явний намір глядача) → довша форма →
- * більше населення → id (детермінізм).
+ * Форма сама є підказкою області? («івано франківська» → стем «франківськ»; «донецька» → «донецьк»).
+ * Такі форми (назва/відмінок обласного центру) — це орієнтир «де», а не ціль донату.
  */
+function isOblastQualifier(form: string): boolean {
+  return detectOblastHints(form.split(' ')).size > 0;
+}
+
 function pickBest(cands: Cand[], hints: Set<string>): Cand | null {
-  const hinted = hints.size > 0 ? cands.filter((c) => c.oblast !== null && hints.has(c.oblast)) : [];
-  const pool = hinted.length > 0 ? hinted : cands;
+  const inHint = hints.size > 0 ? cands.filter((c) => c.oblast !== null && hints.has(c.oblast)) : [];
+  // Уточнювач-«де» не виграє, КОЛИ в підказаній області названо інше місто — тоді він лише орієнтир
+  // («Долина Івано-Франківськ» → Долина, не центр). Якщо названо ЛИШЕ центр — він і лишається (fallback).
+  const targets = inHint.filter((c) => !isOblastQualifier(c.form));
+  const pool = targets.length > 0 ? targets : inHint.length > 0 ? inHint : cands;
   let best: Cand | null = null;
-  for (const c of pool) {
-    if (
-      !best ||
-      c.form.length > best.form.length ||
-      (c.form.length === best.form.length && c.population > best.population) ||
-      (c.form.length === best.form.length && c.population === best.population && c.id < best.id)
-    ) {
-      best = c;
-    }
-  }
+  for (const c of pool) if (!best || better(c, best)) best = c;
   return best;
 }
 
@@ -137,11 +148,23 @@ function pickBest(cands: Cand[], hints: Set<string>): Cand | null {
  * Тезки розвʼязуються підказкою області з коментаря, інакше — населенням. Нижче порогу — null:
  * донат лишиться нерозпізнаним і потрапить у чергу адмінки (свідомо, замість «нарахувати наосліп»).
  */
-export async function resolveCity(db: PrismaClient, message: string): Promise<CityMatch | null> {
+export async function resolveCity(
+  db: PrismaClient,
+  message: string,
+  opts: { abroad?: boolean; hideAggressor?: boolean } = {},
+): Promise<CityMatch | null> {
   const norm = normalize(message);
   if (!norm) return null;
   const words = norm.split(' ').slice(0, MAX_WORDS);
   const hints = detectOblastHints(words);
+
+  // Пул кандидатів за країною: вимкнено abroad → лише UA (повна поточна поведінка);
+  // увімкнено → UA + світ (з опційним виключенням рф/рб).
+  const countryWhere: Prisma.SettlementWhereInput = !opts.abroad
+    ? { country: 'UA' }
+    : opts.hideAggressor
+      ? { country: { notIn: AGGRESSOR } }
+      : {};
 
   const ngrams: string[] = [];
   for (let n = 1; n <= 4; n++) {
@@ -151,19 +174,19 @@ export async function resolveCity(db: PrismaClient, message: string): Promise<Ci
 
   const [byName, byAlias] = await Promise.all([
     db.settlement.findMany({
-      where: { nameNorm: { in: ngrams } },
-      select: { id: true, name: true, nameNorm: true, population: true, oblast: true },
+      where: { nameNorm: { in: ngrams }, ...countryWhere },
+      select: { id: true, name: true, nameNorm: true, population: true, oblast: true, country: true },
     }),
     db.settlementAlias.findMany({
-      where: { aliasNorm: { in: ngrams } },
-      select: { aliasNorm: true, settlement: { select: { id: true, name: true, population: true, oblast: true } } },
+      where: { aliasNorm: { in: ngrams }, settlement: countryWhere },
+      select: { aliasNorm: true, settlement: { select: { id: true, name: true, population: true, oblast: true, country: true } } },
     }),
   ]);
   const exactCands: Cand[] = [
-    ...byName.map((s) => ({ id: s.id, name: s.name, form: s.nameNorm, population: s.population ?? 0, oblast: s.oblast })),
+    ...byName.map((s) => ({ id: s.id, name: s.name, form: s.nameNorm, population: s.population ?? 0, oblast: s.oblast, country: s.country })),
     ...byAlias.map((a) => ({
       id: a.settlement.id, name: a.settlement.name, form: a.aliasNorm,
-      population: a.settlement.population ?? 0, oblast: a.settlement.oblast,
+      population: a.settlement.population ?? 0, oblast: a.settlement.oblast, country: a.settlement.country,
     })),
   ].filter((c) => passesStopRule(c.form, c.form, c.population, c.oblast, words, hints));
   const exact = pickBest(exactCands, hints);
@@ -181,6 +204,8 @@ export async function resolveCity(db: PrismaClient, message: string): Promise<Ci
   if (fuzzyQs.size === 0) return null;
   const qs = [...fuzzyQs].slice(0, MAX_FUZZY_QS);
 
+  // Fuzzy лишається лише UA — головний вектор хибних збігів; закордон матчиться точним збігом
+  // + відмінковим аліасом (ВЕСУМ). Фільтр opts.abroad/hideAggressor тут НЕ застосовується.
   const rows = await db.$transaction(async (tx) => {
     // Поріг оператора % — SET LOCAL (живе рівно до кінця транзакції; зʼєднання гарантовано те саме).
     await tx.$executeRawUnsafe(`SET LOCAL pg_trgm.similarity_threshold = ${SIMILARITY_THRESHOLD}`);
@@ -202,6 +227,7 @@ export async function resolveCity(db: PrismaClient, message: string): Promise<Ci
           AND abs(length(s2."nameNorm") - length(w.q)) <= ${MAX_FUZZY_LEN_DIFF}
       ) c
       JOIN "Settlement" s ON s.id = c.sid
+      WHERE s.country = 'UA'
       ORDER BY c.sim DESC, s.population DESC NULLS LAST, s.id ASC
       LIMIT ${FUZZY_CANDIDATES}`;
   });
@@ -211,8 +237,10 @@ export async function resolveCity(db: PrismaClient, message: string): Promise<Ci
       // Стоп-правило і для fuzzy: маркер шукаємо біля слова коментаря (q), бо form — з довідника.
       passesStopRule(r.form, r.q, r.population ?? 0, r.oblast, words, hints),
   );
-  // Підказка області перемагає вищу схожість: «з Тестівки на Сумщині» → сумська тезка.
-  const top = ok.find((r) => r.oblast !== null && hints.has(r.oblast)) ?? ok[0];
+  // Підказка області перемагає вищу схожість: «з Тестівки на Сумщині» → сумська тезка. Те саме
+  // правило уточнювача, що й у точному збігу: форма-орієнтир («донецька») не виграє за наявності цілі.
+  const inHint = ok.filter((r) => r.oblast !== null && hints.has(r.oblast));
+  const top = inHint.find((r) => !isOblastQualifier(r.form)) ?? inHint[0] ?? ok[0];
   if (!top) return null;
   return { settlementId: top.id, name: top.name, matchedForm: top.form };
 }

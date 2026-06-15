@@ -8,20 +8,23 @@ import { useRouter } from 'next/navigation';
 // (топ/стрічка/мапа/лічильники), без повного перезавантаження сторінки.
 // EventSource сам перепідключається, якщо з'єднання обірветься.
 // channelKey (overlayKey) задається для оверлеїв у OBS, де нема cookie-сесії — щоб SSE
-// знав, чий канал слухати. Панель лишає його порожнім і скоупиться cookie-сесією.
-export function LiveRefresh({ channelKey, publicHandle, globalChannel }: { channelKey?: string; publicHandle?: string; globalChannel?: boolean }) {
+// знав, чий канал слухати. dockKey — те саме для донат-доку /dock. Панель лишає їх порожніми
+// і скоупиться cookie-сесією.
+export function LiveRefresh({ channelKey, dockKey, publicHandle, globalChannel }: { channelKey?: string; dockKey?: string; publicHandle?: string; globalChannel?: boolean }) {
   const router = useRouter();
 
   useEffect(() => {
-    // Оверлей → ?k=<overlayKey>; публічна сторінка → ?h=<handle>; глобальна мапа → ?g=1;
-    // панель — cookie-сесія.
+    // Оверлей → ?k=<overlayKey>; док → ?d=<dockKey>; публічна сторінка → ?h=<handle>;
+    // глобальна мапа → ?g=1; панель — cookie-сесія.
     const url = channelKey
       ? `/api/stream?k=${encodeURIComponent(channelKey)}`
-      : publicHandle
-        ? `/api/stream?h=${encodeURIComponent(publicHandle)}`
-        : globalChannel
-          ? '/api/stream?g=1'
-          : '/api/stream';
+      : dockKey
+        ? `/api/stream?d=${encodeURIComponent(dockKey)}`
+        : publicHandle
+          ? `/api/stream?h=${encodeURIComponent(publicHandle)}`
+          : globalChannel
+            ? '/api/stream?g=1'
+            : '/api/stream';
     const es = new EventSource(url);
 
     // Дебаунс: серія донатів підряд дасть один refresh, а не молотіння сервера.
@@ -43,7 +46,7 @@ export function LiveRefresh({ channelKey, publicHandle, globalChannel }: { chann
       if (timer) clearTimeout(timer);
       es.close();
     };
-  }, [router, channelKey, publicHandle, globalChannel]);
+  }, [router, channelKey, dockKey, publicHandle, globalChannel]);
 
   return null;
 }

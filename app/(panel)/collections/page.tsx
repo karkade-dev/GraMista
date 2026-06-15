@@ -23,8 +23,9 @@ function CollectionCard({ c }: { c: CollectionRow }) {
   const active = c.status === 'active';
   const paused = c.status === 'paused';
   const hasGoal = c.goalUah != null && c.goalUah > 0;
-  const actualPercent = hasGoal ? Math.round((c.raisedUah / c.goalUah!) * 100) : 0;
-  const reached = hasGoal && c.raisedUah >= c.goalUah!;
+  // Показуємо «накопичено» з урахуванням стартової суми (displayed), а не лише реальні донати.
+  const actualPercent = hasGoal ? Math.round((c.displayedUah / c.goalUah!) * 100) : 0;
+  const reached = hasGoal && c.displayedUah >= c.goalUah!;
   const report = collectionReportText(c);
 
   return (
@@ -42,14 +43,14 @@ function CollectionCard({ c }: { c: CollectionRow }) {
           {reached && <span className="cc-badge reached">🎉 ціль досягнуто</span>}
         </div>
         <div className="cc-sum">
-          <b>{formatUah(c.raisedUah)}</b>
+          <b>{formatUah(c.displayedUah)}</b>
           {hasGoal && <> з {formatUah(c.goalUah!)}</>}
         </div>
       </div>
 
       {hasGoal && (
         <div className="cl-bar">
-          <i style={{ width: `${c.percent}%` }} />
+          <i style={{ width: `${c.displayedPercent}%` }} />
           <span className="cl-pct">{actualPercent}%</span>
         </div>
       )}
@@ -85,6 +86,7 @@ function CollectionCard({ c }: { c: CollectionRow }) {
             <input type="hidden" name="id" value={c.id} />
             <input type="text" name="name" defaultValue={c.name} className="fld grow" maxLength={120} placeholder="назва" />
             <input type="number" name="goalUah" defaultValue={c.goalUah ?? ''} className="fld num" min={1} step="1" />
+            <input type="number" name="seedUah" defaultValue={c.seedUah || ''} className="fld num" min={0} step="1" title="вже зібрано (стартова сума для бара)" placeholder="вже зібрано, ₴" />
             <input type="date" name="endAt" defaultValue={c.endAt ? toLocalDateInput(c.endAt) : ''} className="fld" />
             <button type="submit" className="btn-find">
               Зберегти
@@ -170,6 +172,7 @@ export default async function CollectionsPage() {
         <form action={createCollectionAction} className="cc-create">
           <input type="text" name="name" placeholder="Назва збору (напр. «На дрон для бригади»)…" className="fld grow" maxLength={120} required />
           <input type="number" name="goalUah" placeholder="ціль, ₴ (необов'язково)" className="fld num" min={1} step="1" />
+          <input type="number" name="seedUah" placeholder="вже зібрано, ₴ (необов'язково)" className="fld num" min={0} step="1" title="стартова сума: додається до бара, не вважається реальним донатом" />
           <input type="date" name="endAt" className="fld" title="дата завершення (необов'язково)" />
           <button type="submit" className="btn-find">
             ＋ Створити збір

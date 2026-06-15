@@ -5,6 +5,7 @@ import { twoFactor } from 'better-auth/plugins';
 import { prisma } from './db';
 import { cleanDisplayName } from './displayName';
 import { sendEmail, buildVerificationEmail, buildResetPasswordEmail } from './email';
+import { signupsClosed } from './signups';
 
 // Дефолтні назви моделей Better Auth (user/session/account/verification) збігаються з нашими
 // Prisma-делегатами (prisma.user/session/...), тож мапінг назв не потрібен.
@@ -12,6 +13,9 @@ export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: 'postgresql' }),
   emailAndPassword: {
     enabled: true,
+    // Закрита програма (див. lib/signups.ts): блокує сам ендпойнт реєстрації,
+    // а не лише форму — curl на /api/auth/sign-up/email теж отримає відмову.
+    disableSignUp: signupsClosed(),
     autoSignIn: true,
     requireEmailVerification: true,
     minPasswordLength: 8,

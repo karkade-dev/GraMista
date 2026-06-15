@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/db';
 import { donationFlashShared } from '@/lib/map';
-import { userIdByOverlayKey, userIdByHandle } from '@/lib/publicUser';
+import { userIdByOverlayKey, userIdByHandle, userIdByDockKey } from '@/lib/publicUser';
 import { getUserId } from '@/lib/session';
 import { parseDonationNotify } from '@/lib/notify';
 import { normalizeHandle } from '@/lib/handle';
@@ -13,20 +13,23 @@ export const runtime = 'nodejs';
 
 // SSE-канал живого оновлення: спільна шина donationBus (один LISTEN на процес) роздає
 // NOTIFY-payload "<userId>:<externalId>" усім запитам; кожен фільтрує свій скоуп.
-// Скоуп: ?k=<overlayKey> (оверлеї) · ?h=<handle> (публічна сторінка) · ?g=1 (глобальна
-// мапа /ukraine — донати ВСІХ учасників) · cookie-сесія (панель).
+// Скоуп: ?k=<overlayKey> (оверлеї) · ?d=<dockKey> (донат-док) · ?h=<handle> (публічна
+// сторінка) · ?g=1 (глобальна мапа /ukraine — донати ВСІХ учасників) · cookie-сесія (панель).
 export async function GET(request: Request): Promise<Response> {
   const params = new URL(request.url).searchParams;
   const key = params.get('k') ?? '';
+  const dockKey = params.get('d') ?? '';
   const pubHandle = normalizeHandle(params.get('h') ?? '');
   const global = params.get('g') === '1';
   const U = global
     ? null
     : key
       ? await userIdByOverlayKey(prisma, key)
-      : pubHandle
-        ? await userIdByHandle(prisma, pubHandle)
-        : await getUserId();
+      : dockKey
+        ? await userIdByDockKey(prisma, dockKey)
+        : pubHandle
+          ? await userIdByHandle(prisma, pubHandle)
+          : await getUserId();
   if (!global && !U) return new Response('unauthorized', { status: 401 });
 
   const encoder = new TextEncoder();

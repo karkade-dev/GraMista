@@ -38,6 +38,8 @@ export interface PublicPageData {
   state: DashboardState;
   /** УСІ міста з балами активного збору (нема збору → за весь час); топ-10/30/«усі» — зрізи на UI. */
   fullLeaderboard: LeaderRow[];
+  /** Окремий повний топ закордонних міст — лише в режимі 'separate' (інакше undefined). */
+  fullAbroad?: LeaderRow[];
   /** «Зібрано загалом» — гаманець стрімера за весь час (футер, OG-опис); НЕ скоупиться збором. */
   totalAllTimeUah: number;
   battle: BattleGap | null;
@@ -90,9 +92,18 @@ export async function getPublicPage(db: PrismaClient, handle: string): Promise<P
   if (!userId) return null;
   const user = await db.user.findUnique({
     where: { id: userId },
-    select: { name: true, handle: true, twitchUrl: true, youtubeUrl: true, monobankJarUrl: true, publicShowStreams: true, showCommentPublic: true },
+    select: { name: true, handle: true, twitchUrl: true, youtubeUrl: true, monobankJarUrl: true, publicShowStreams: true, showCommentPublic: true, abroadCities: true, abroadTopMode: true },
   });
   if (!user?.handle) return null;
+
+  // Режим закордону (дзеркало getState): off → лише UA; shared → один рейтинг UA+світ;
+  // separate → основний топ лише UA + окремий повний список закордонних. Рахуємо тут,
+  // бо country-фільтр fullLeaderboard/fullAbroad потрібен ще до того, як getState поверне state.
+  const abroadMode: 'off' | 'shared' | 'separate' = !user.abroadCities
+    ? 'off'
+    : user.abroadTopMode === 'shared'
+      ? 'shared'
+      : 'separate';
 
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
@@ -101,10 +112,15 @@ export async function getPublicPage(db: PrismaClient, handle: string): Promise<P
   const openCol = await db.collection.findFirst({ where: { userId, status: 'active' }, orderBy: { startAt: 'desc' } });
   const colId = openCol?.id;
 
-  const [state, fullLeaderboard, allTimeAgg, todayAgg, todayLeaderRows, streams, pastCols] = await Promise.all([
+  const [state, fullLeaderboard, fullAbroad, allTimeAgg, todayAgg, todayLeaderRows, streams, pastCols] = await Promise.all([
     getState(db, userId, {}, colId ? { collectionId: colId } : {}),
     // Ліміт «всі міста з балами»: міст України < 100к — фактично без обрізання.
-    leaderboard(db, userId, { limit: 100_000, ...(colId ? { collectionId: colId } : {}) }),
+    // shared → один список (UA+світ); off/separate → основний лише UA.
+    leaderboard(db, userId, { limit: 100_000, country: abroadMode === 'shared' ? undefined : 'ua', ...(colId ? { collectionId: colId } : {}) }),
+    // Окремий повний топ закордонних міст — лише в режимі 'separate'.
+    abroadMode === 'separate'
+      ? leaderboard(db, userId, { limit: 100_000, country: 'abroad', ...(colId ? { collectionId: colId } : {}) })
+      : Promise.resolve(undefined),
     db.donation.aggregate({ where: { userId }, _sum: { amount: true } }),
     db.donation.aggregate({
       where: { userId, createdAt: { gte: startOfDay } },
@@ -116,7 +132,7 @@ export async function getPublicPage(db: PrismaClient, handle: string): Promise<P
     db.collection.findMany({
       where: { userId, status: 'completed' },
       orderBy: [{ endAt: 'desc' }, { startAt: 'desc' }],
-      select: { id: true, name: true, endAt: true },
+      select: { id: true, name: true, endAt: true, seedUah: true },
     }),
   ]);
   const activeCollection = openCol ? await collectionSummary(db, userId, openCol) : null;
@@ -135,7 +151,8 @@ export async function getPublicPage(db: PrismaClient, handle: string): Promise<P
     id: c.id,
     name: c.name,
     endAt: c.endAt,
-    raisedUah: sumByCol.get(c.id) ?? 0,
+    // Показове «зібрано» = стартова сума + реальні донати (як на живому барі).
+    raisedUah: (sumByCol.get(c.id) ?? 0) + c.seedUah.toNumber(),
   }));
 
   return {
@@ -151,6 +168,7 @@ export async function getPublicPage(db: PrismaClient, handle: string): Promise<P
     },
     state,
     fullLeaderboard,
+    fullAbroad,
     totalAllTimeUah: allTimeAgg._sum.amount?.toNumber() ?? 0,
     battle: battleGap(fullLeaderboard),
     tiles: {
@@ -228,7 +246,8 @@ export async function getPublicCollectionArchive(
     startAt: c.startAt,
     endAt: c.endAt,
     goalUah: c.goalUah?.toNumber() ?? null,
-    raisedUah: agg._sum.amount?.toNumber() ?? 0,
+    // Показове «зібрано» = стартова сума + реальні донати; к-сть донатів лишається реальною.
+    raisedUah: (agg._sum.amount?.toNumber() ?? 0) + c.seedUah.toNumber(),
     donationCount: agg._count,
     cities,
     streams,

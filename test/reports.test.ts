@@ -27,6 +27,7 @@ test('streamReportImage: kicker, заголовок, 3 числа, топ-міс
 test('collectionReportImage: відсоток фактичний (може >100), 3 числа', () => {
   const c: CollectionRow = {
     id: 'c1', name: 'На авто', goalUah: 1000, raisedUah: 1500, percent: 100,
+    seedUah: 0, displayedUah: 1500, displayedPercent: 100,
     status: 'active', startAt: new Date('2026-03-01T00:00:00Z'), endAt: null, streamCount: 2,
     topCities: [{ settlementId: 'kyiv', name: 'Київ', points: 15 }],
   };
@@ -41,6 +42,7 @@ test('collectionReportImage: відсоток фактичний (може >100)
 test('collectionReportImage: ціль 0 → 0%', () => {
   const c: CollectionRow = {
     id: 'c2', name: 'Без цілі', goalUah: 0, raisedUah: 500, percent: 0,
+    seedUah: 0, displayedUah: 500, displayedPercent: 0,
     status: 'active', startAt: new Date(), endAt: null, streamCount: 1, topCities: [],
   };
   assert.equal(collectionReportImage(c).stats.find((x) => x.label === 'Виконано')!.value, '0%');

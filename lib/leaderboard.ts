@@ -18,6 +18,8 @@ export interface LbFilter {
   collectionId?: string;
   /** true — від найменшого до найбільшого */
   asc?: boolean;
+  /** 'ua' — лише українські НП; 'abroad' — лише закордонні; не задано — всі разом. */
+  country?: 'ua' | 'abroad';
 }
 
 /** Топ міст = сума балів із журналу PointEvent з фільтрами (період / стріми / напрямок). */
@@ -32,6 +34,8 @@ export async function leaderboard(
   if (from || to) where.createdAt = { ...(from ? { gte: from } : {}), ...(to ? { lt: to } : {}) };
   if (streamIds) where.streamId = { in: streamIds };
   if (collectionId) where.collectionId = collectionId;
+  if (filter.country === 'ua') where.settlement = { country: 'UA' };
+  else if (filter.country === 'abroad') where.settlement = { country: { not: 'UA' } };
 
   const grouped = await db.pointEvent.groupBy({ by: ['settlementId'], where, _sum: { points: true } });
   if (grouped.length === 0) return [];

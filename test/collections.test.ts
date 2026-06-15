@@ -53,13 +53,24 @@ after(async () => {
 
 test('collectionReportText: текст звіту (назва, зібрано/ціль/%, топ міст)', () => {
   const text = collectionReportText({
-    id: 'x', name: 'На авто', goalUah: 1000, raisedUah: 750, percent: 75, status: 'active',
-    startAt: new Date(), endAt: null, streamCount: 2,
+    id: 'x', name: 'На авто', goalUah: 1000, raisedUah: 750, percent: 75,
+    seedUah: 0, displayedUah: 750, displayedPercent: 75,
+    status: 'active', startAt: new Date(), endAt: null, streamCount: 2,
     topCities: [{ settlementId: 'kyiv', name: 'Київ', points: 5 }],
   });
   assert.ok(text.includes('На авто'), 'назва');
   assert.ok(text.includes('75%'), 'відсоток');
   assert.ok(text.includes('Київ'), 'топ міст');
+});
+
+test('collectionReportText: «Зібрано» рахує displayed (seed+донати)', () => {
+  const text = collectionReportText({
+    id: 'x', name: 'Прод', goalUah: 1000, raisedUah: 300, percent: 30,
+    seedUah: 200, displayedUah: 500, displayedPercent: 50,
+    status: 'active', startAt: new Date(), endAt: null, streamCount: 0, topCities: [],
+  });
+  assert.ok(text.includes('50%'), 'відсоток від displayed');
+  assert.ok(text.includes('500'), 'сума з урахуванням стартової');
 });
 
 test('collectionSummary: зібрано = донати з позначкою збору (не стріми)', async () => {
@@ -71,6 +82,28 @@ test('collectionSummary: зібрано = донати з позначкою з�
   assert.equal(sum.raisedUah, 800);
   assert.equal(sum.percent, 40);
   assert.equal(sum.topCities[0]?.settlementId, 'kyiv');
+});
+
+test('collectionSummary: seedUah додається у displayed, але не в raised/percent', async () => {
+  const c = await testDb.collection.create({
+    data: { userId: U, name: 'Продовження', goalUah: 1000, seedUah: 200, status: 'active' },
+  });
+  await applyDonation(testDb, U, { externalId: 's1', donorName: 'A', amountUah: 300, message: '' }, 'kyiv', null, { collectionId: c.id });
+  const sum = await collectionSummary(testDb, U, await testDb.collection.findUniqueOrThrow({ where: { id: c.id } }));
+  assert.equal(sum.raisedUah, 300, 'реальні донати — без seed');
+  assert.equal(sum.percent, 30, 'реальний % — без seed');
+  assert.equal(sum.seedUah, 200);
+  assert.equal(sum.displayedUah, 500, 'seed + донати');
+  assert.equal(sum.displayedPercent, 50, '(200+300)/1000');
+});
+
+test('createCollection/updateCollection: seedUah зберігається й редагується', async () => {
+  const c = await createCollection(testDb, U, { name: 'Збір', goalUah: 1000, seedUah: 150 });
+  let sum = await collectionSummary(testDb, U, await testDb.collection.findUniqueOrThrow({ where: { id: c.id } }));
+  assert.equal(sum.seedUah, 150);
+  await updateCollection(testDb, U, c.id, { seedUah: 400 });
+  sum = await collectionSummary(testDb, U, await testDb.collection.findUniqueOrThrow({ where: { id: c.id } }));
+  assert.equal(sum.seedUah, 400, 'збільшення суми через редагування');
 });
 
 test('збір без цілі: goalUah null → percent 0, звіт без «з X»', async () => {

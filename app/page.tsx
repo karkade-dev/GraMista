@@ -1,10 +1,11 @@
 import './landing.css';
 import { prisma } from '@/lib/db';
 import { getGlobalMap } from '@/lib/globalMap';
-import { pluralMist } from '@/lib/format';
+import { pluralMist, formatUah } from '@/lib/format';
 import { getUserId } from '@/lib/session';
 import { signupsClosed } from '@/lib/signups';
 import { HeroMap } from '@/app/HeroMap';
+import { CountUp } from '@/app/CountUp';
 import { SignOutButton } from '@/app/SignOutButton';
 
 // Публічний лендінг на / (поза групою (panel) — без операторської шапки й без auth).
@@ -85,60 +86,23 @@ export default async function LandingPage() {
           {/* live illustration (декоративна) */}
           <div className="show-card">
             <div className="show-head">
-              <div className="show-title">🏆 Топ міст · цей тиждень</div>
+              <div className="show-title">🏆 Топ міст України</div>
               <div className="show-tag">наживо</div>
             </div>
 
-            <div className="top-row">
-              <div className="medal m1">1</div>
-              <div>
-                <div className="city-name">Львів</div>
-                <div className="city-sub">+ скарбничка 60 ₴</div>
-              </div>
-              <div className="pts">
-                128 <small>балів</small>
-              </div>
-            </div>
-            <div className="top-row">
-              <div className="medal m2">2</div>
-              <div>
-                <div className="city-name">Київ</div>
-                <div className="city-sub">+ скарбничка 30 ₴</div>
-              </div>
-              <div className="pts">
-                115 <small>балів</small>
-              </div>
-            </div>
-            <div className="top-row">
-              <div className="medal m3">3</div>
-              <div>
-                <div className="city-name">Одеса</div>
-                <div className="city-sub">+ скарбничка 90 ₴</div>
-              </div>
-              <div className="pts">
-                97 <small>балів</small>
-              </div>
-            </div>
-            <div className="top-row">
-              <div className="medal m-plain">4</div>
-              <div>
-                <div className="city-name">Харків</div>
-                <div className="city-sub">+ скарбничка 10 ₴</div>
-              </div>
-              <div className="pts">
-                82 <small>балів</small>
-              </div>
-            </div>
-            <div className="top-row">
-              <div className="medal m-plain">5</div>
-              <div>
-                <div className="city-name">Дніпро</div>
-                <div className="city-sub">+ скарбничка 70 ₴</div>
-              </div>
-              <div className="pts">
-                74 <small>балів</small>
-              </div>
-            </div>
+            {g.top.length === 0 ? (
+              <div className="top-row top-row-empty">Перші міста ось-ось засвітяться 🔥</div>
+            ) : (
+              g.top.slice(0, 5).map((c, i) => (
+                <div className="top-row" key={c.settlementId}>
+                  <div className={`medal ${['m1', 'm2', 'm3'][i] ?? 'm-plain'}`}>{i + 1}</div>
+                  <div>
+                    <div className="city-name">{c.name}</div>
+                  </div>
+                  <div className="pts">{formatUah(c.sumUah)}</div>
+                </div>
+              ))
+            )}
 
             <div className="mini-map">
               <HeroMap points={g.litCities} />
@@ -149,6 +113,20 @@ export default async function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* ===== RAISED BAND (соц-доказ) ===== */}
+      {g.totalUah > 0 && (
+        <section className="raised-band-sec">
+          <div className="wrap">
+            <div className="raised-band">
+              <span className="raised-emoji">💛</span>
+              <span className="raised-text">
+                Через GraMista вже зібрано <b><CountUp id="landing-total" value={g.totalUah} /></b>
+              </span>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ===== GLOBAL MAP BANNER ===== */}
       <section className="ukr-banner-sec">

@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db';
 import { requireUserId } from '@/lib/session';
-import { ensureOverlayKey } from '@/lib/publicUser';
-import { saveProfileAction, disconnectMonoAction, regenerateOverlayAction } from './actions';
+import { ensureOverlayKey, ensureDockKey } from '@/lib/publicUser';
+import { saveProfileAction, disconnectMonoAction, regenerateOverlayAction, regenerateDockAction } from './actions';
 import { toCommentMode, wordListsForUi } from '@/lib/censor';
 import { MonoConnect } from './MonoConnect';
 import { CommentSettings } from './CommentSettings';
@@ -16,11 +16,12 @@ export default async function SettingsPage() {
   const U = await requireUserId();
   const user = await prisma.user.findUnique({
     where: { id: U },
-    select: { handle: true, monobankJarUrl: true, twitchUrl: true, youtubeUrl: true, publicShowStreams: true, showOnGlobalMap: true, twoFactorEnabled: true, commentMode: true, bannedWordsAdded: true, bannedWordsAllowed: true, showCommentPublic: true },
+    select: { handle: true, monobankJarUrl: true, twitchUrl: true, youtubeUrl: true, publicShowStreams: true, showOnGlobalMap: true, abroadCities: true, abroadWorldMap: true, abroadTopMode: true, abroadHideAggressor: true, twoFactorEnabled: true, commentMode: true, bannedWordsAdded: true, bannedWordsAllowed: true, showCommentPublic: true },
   });
   const mode = toCommentMode(user?.commentMode);
   const wordLists = wordListsForUi(user?.bannedWordsAdded ?? '', user?.bannedWordsAllowed ?? '');
   const overlayKey = await ensureOverlayKey(prisma, U);
+  const dockKey = await ensureDockKey(prisma, U);
   const source = await prisma.donationSource.findFirst({
     where: { userId: U, type: 'monobank' },
     select: { status: true, title: true, lastEventAt: true },
@@ -112,6 +113,44 @@ export default async function SettingsPage() {
             </Hint>
             <a href="/ukraine" target="_blank" rel="noreferrer">Мапа України ↗</a>
           </div>
+          <div className="set-line">
+            <label className="set-row">
+              <input type="checkbox" name="abroadCities" defaultChecked={user?.abroadCities ?? false} />
+              Розпізнавати міста закордоном
+            </label>
+            <Hint>
+              Донат із коментарем «Варшава», «Прага», «Берлін» (українською) отримає бали й потрапить
+              у топ і стрічку. Вимкнено — лишається нерозпізнаним, як зараз. Назви — лише кирилицею.
+            </Hint>
+          </div>
+          <div className="set-line">
+            <label className="set-row">
+              <input type="checkbox" name="abroadWorldMap" defaultChecked={user?.abroadWorldMap ?? false} />
+              Показувати закордон на мапі
+            </label>
+            <Hint>
+              Додає легкий шар кордонів світу; іноземні міста світяться крапками. Вимкнено — мапа
+              лишається суто українською, закордон видно лише у списку топу.
+            </Hint>
+          </div>
+          <div className="set-line">
+            <span className="lbl-row">Топ закордонних міст</span>
+            <label className="set-row">
+              <input type="radio" name="abroadTopMode" value="separate" defaultChecked={(user?.abroadTopMode ?? 'separate') !== 'shared'} />
+              Окремий список «Світ / Діаспора»
+            </label>
+            <label className="set-row">
+              <input type="radio" name="abroadTopMode" value="shared" defaultChecked={user?.abroadTopMode === 'shared'} />
+              Спільний з містами України
+            </label>
+          </div>
+          <div className="set-line">
+            <label className="set-row">
+              <input type="checkbox" name="abroadHideAggressor" defaultChecked={user?.abroadHideAggressor ?? false} />
+              Не зараховувати міста рф/рб
+            </label>
+            <Hint>За замовчуванням зараховуються. Увімкни, щоб ігнорувати назви міст країн-агресорів.</Hint>
+          </div>
           <button type="submit">Зберегти</button>
         </form>
         {user?.handle && (
@@ -145,6 +184,10 @@ export default async function SettingsPage() {
         <p>Токен оверлеїв: <code>{overlayKey}</code></p>
         <form action={regenerateOverlayAction}>
           <button type="submit">Оновити силки оверлеїв (старі перестануть працювати)</button>
+        </form>
+        <p style={{ marginTop: 16 }}>Силка донат-доку (приватна, з іменами): <code>{dockKey}</code></p>
+        <form action={regenerateDockAction}>
+          <button type="submit">Оновити силку доку (стара перестане працювати)</button>
         </form>
       </section>
     </main>

@@ -21,7 +21,7 @@ function Row({ c, i }: { c: LeaderRow; i: number }) {
   );
 }
 
-export function TopCities({ rows }: { rows: LeaderRow[] }) {
+function TopList({ rows, allLabel = 'Усі міста' }: { rows: LeaderRow[]; allLabel?: string }) {
   const [expanded, setExpanded] = useState(false);
   const [allOpen, setAllOpen] = useState(false);
   const shown = rows.slice(0, expanded ? 30 : 10);
@@ -45,7 +45,7 @@ export function TopCities({ rows }: { rows: LeaderRow[] }) {
         <div className="pub-race-bg" onClick={() => setAllOpen(false)}>
           <div className="pub-panel pub-all" onClick={(e) => e.stopPropagation()}>
             <button type="button" className="x" aria-label="закрити" onClick={() => setAllOpen(false)}>✕</button>
-            <h3>Усі міста ({rows.length})</h3>
+            <h3>{allLabel} ({rows.length})</h3>
             <div className="list">
               {rows.map((c, i) => <Row key={c.settlementId} c={c} i={i} />)}
             </div>
@@ -54,4 +54,22 @@ export function TopCities({ rows }: { rows: LeaderRow[] }) {
       )}
     </>
   );
+}
+
+export function TopCities({ rows, abroadRows }: { rows: LeaderRow[]; abroadRows?: LeaderRow[] }) {
+  if (abroadRows) {
+    return (
+      <div className="pub-topsplit">
+        <div>
+          <div className="pub-topcap pub-topcap-ua">Міста України</div>
+          <TopList rows={rows} />
+        </div>
+        <div>
+          <div className="pub-topcap pub-topcap-abroad">🌍 Світ / Діаспора</div>
+          <TopList rows={abroadRows} allLabel="Усі закордонні міста" />
+        </div>
+      </div>
+    );
+  }
+  return <TopList rows={rows} />;
 }

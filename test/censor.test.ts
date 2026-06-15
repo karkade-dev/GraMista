@@ -206,3 +206,18 @@ dbTest('власні слова (added) і винятки (allowed) діють �
   const state = await getState(testDb, U);
   assert.equal(state.recent[0]?.message, 'ж*** сука');
 });
+
+dbTest('audience admin: коментар видно стрімеру, навіть коли режим city/hide ховає його від глядачів', async () => {
+  // Донат без розпізнаного міста + режим "city": глядач коментаря не бачить (місто порожнє),
+  // але стрімер на дашборді має бачити текст — щоб знати, яке місто призначити вручну.
+  await applyDonation(testDb, U, { externalId: 'cz4', donorName: 'X', amountUah: 70, message: 'тестовий' }, null);
+  await testDb.user.update({ where: { id: U }, data: { commentMode: 'city' } });
+  assert.equal((await getState(testDb, U)).recent[0]?.message, '');
+  assert.equal((await getState(testDb, U, {}, { audience: 'admin' })).recent[0]?.message, 'тестовий');
+});
+
+dbTest('audience admin: мат у коментарі все одно маскується (на панель сирий мат не йде)', async () => {
+  await applyDonation(testDb, U, { externalId: 'cz5', donorName: 'X', amountUah: 70, message: 'привіт ху*ло' }, null);
+  await testDb.user.update({ where: { id: U }, data: { commentMode: 'hide' } });
+  assert.equal((await getState(testDb, U, {}, { audience: 'admin' })).recent[0]?.message, 'привіт х****');
+});

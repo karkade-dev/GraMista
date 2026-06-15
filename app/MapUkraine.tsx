@@ -83,20 +83,15 @@ function applyRadiusScale(map: MlMap, points: MapPoint[]) {
 // Світіння під крапкою + сама крапка — спільні для режиму «Точки» й одиночних точок у кластерному
 // джерелі. Радіуси сюди не входять — їх ставить applyRadiusScale від поточного максимуму.
 const GLOW_PAINT: CircleLayerSpecification['paint'] = {
-  'circle-color': '#E2A878',
+  'circle-color': ['case', ['get', 'abroad'], '#5DCAA5', '#E2A878'],
   'circle-blur': 1,
   'circle-opacity': 0.35,
   'circle-radius': R_MIN * GLOW_K,
 };
 const DOT_PAINT: CircleLayerSpecification['paint'] = {
   'circle-color': [
-    'interpolate',
-    ['linear'],
-    ['get', 'points'],
-    0.2, '#C08A5E',
-    3, '#E2A878',
-    8, '#EBCB82',
-    15, '#E0B66B',
+    'case', ['get', 'abroad'], '#5DCAA5',
+    ['interpolate', ['linear'], ['get', 'points'], 0.2, '#C08A5E', 3, '#E2A878', 8, '#EBCB82', 15, '#E0B66B'],
   ],
   'circle-radius': R_MIN,
   // Топ-3 за балами — золоте/срібне/бронзове кільце, решта — тонкий темний обідок.
@@ -143,7 +138,7 @@ function toFeatureCollection(points: MapPoint[]) {
     features: points.map((p) => ({
       type: 'Feature' as const,
       geometry: { type: 'Point' as const, coordinates: [p.lon, p.lat] },
-      properties: { id: p.id, name: p.name, points: p.points, rank: top3.indexOf(p.id) + 1 },
+      properties: { id: p.id, name: p.name, points: p.points, rank: top3.indexOf(p.id) + 1, abroad: p.abroad },
     })),
   };
 }
@@ -176,6 +171,8 @@ export interface MapUkraineProps {
   showControls?: boolean;
   /** Публічний контекст: клік на місто → колбек (відкрити картку) замість навігації на /city. */
   onCitySelect?: (settlementId: string) => void;
+  /** Показувати шар кордонів світу й дозволити віддалення (для стрімерів з abroadWorldMap). */
+  world?: boolean;
 }
 
 export function MapUkraine({
@@ -184,6 +181,7 @@ export function MapUkraine({
   initialView = 'points',
   showControls = true,
   onCitySelect,
+  world = false,
 }: MapUkraineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MlMap | null>(null);
@@ -209,6 +207,8 @@ export function MapUkraine({
   interactiveRef.current = showControls;
   const onCitySelectRef = useRef(onCitySelect);
   onCitySelectRef.current = onCitySelect;
+  const worldRef = useRef(world);
+  worldRef.current = world;
 
   useEffect(() => {
     let cancelled = false;
@@ -234,7 +234,7 @@ export function MapUkraine({
         style,
         bounds: UKRAINE_BOUNDS,
         fitBoundsOptions: { padding: 18 },
-        minZoom: 4,
+        minZoom: worldRef.current ? 2.5 : 4,
         maxZoom: 9,
         dragRotate: false,
         pitchWithRotate: false,
@@ -251,6 +251,14 @@ export function MapUkraine({
       map.on('load', () => {
         if (cancelled || !map) return;
         const fc = toFeatureCollection(pointsRef.current);
+
+        // Шар кордонів світу — ПІД Україною (нижче land/oblast/country шарів), приглушено.
+        // Україна лишається деталізованою й найяскравішою; фокус кадру — UKRAINE_BOUNDS.
+        if (worldRef.current) {
+          map.addSource('world', { type: 'geojson', data: '/geo/world-countries.geojson' });
+          map.addLayer({ id: 'world-land', type: 'fill', source: 'world', paint: { 'fill-color': '#1E1813' } });
+          map.addLayer({ id: 'world-borders', type: 'line', source: 'world', paint: { 'line-color': '#2E2620', 'line-width': 0.5 } });
+        }
 
         // Фон: заливка суші + межі областей + виразніший контур країни.
         map.addSource('oblasts', { type: 'geojson', data: '/geo/ukraine-oblasts.geojson' });

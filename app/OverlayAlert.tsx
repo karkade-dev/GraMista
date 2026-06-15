@@ -12,6 +12,8 @@ export interface AlertDonation {
   message: string;
   /** Донат відкрив місто (перший бал у зборі) — святкова стрічка на алерті. */
   newCity: boolean;
+  /** Закордонне місто — мітка 🌍 в алерті. */
+  abroad: boolean;
 }
 
 // router.refresh (LiveRefresh) ре-маунтить компонент, тож базову лінію й активний показ тримаємо
@@ -33,7 +35,7 @@ export function OverlayAlert({ latest }: { latest: AlertDonation | null }) {
     if (latest.externalId !== baselineId) {
       baselineId = latest.externalId;
       shown = latest;
-      shownUntil = Date.now() + 5200; // = тривалість CSS-анімації ov-pop
+      shownUntil = Date.now() + 8000; // = тривалість CSS-анімації ov-pop (мусять збігатися)
       force((x) => x + 1);
     }
   }, [latest?.externalId]);
@@ -58,6 +60,7 @@ export function OverlayAlert({ latest }: { latest: AlertDonation | null }) {
         </div>
         <div className="d-meta">
           <span className="place">{d.city ?? 'місто не вказане'}</span>
+          {d.abroad && <span className="badge abroad">🌍 закордон</span>}
           {d.city && d.points > 0 ? (
             <span className="badge">＋ {formatPoints(d.points)} {pluralBaliv(d.points)} місту</span>
           ) : d.city ? (

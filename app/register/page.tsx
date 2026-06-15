@@ -1,50 +1,39 @@
-'use client';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { authClient } from '@/lib/auth-client';
-import { cleanDisplayName } from '@/lib/displayName';
+import { signupsClosed } from '@/lib/signups';
+import { RegisterForm } from './RegisterForm';
 
+// Закрита програма: замість форми — пояснення і запрошення написати Оресту особисто.
+// Сам ендпойнт реєстрації закритий у lib/auth.ts (disableSignUp), це лише вітрина.
 export default function RegisterPage() {
-  const router = useRouter();
-  const [err, setErr] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [joinGlobal, setJoinGlobal] = useState(true);
-
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setErr(''); setBusy(true);
-    const f = new FormData(e.currentTarget);
-    const nameCheck = cleanDisplayName(String(f.get('name')));
-    if (!nameCheck.ok) { setBusy(false); setErr(nameCheck.error); return; }
-    const email = String(f.get('email'));
-    const { error } = await authClient.signUp.email({
-      email,
-      password: String(f.get('password')),
-      name: nameCheck.value,
-      showOnGlobalMap: joinGlobal,
-      callbackURL: '/dashboard', // куди приведе клік по посиланню з листа (після авто-входу)
-    });
-    setBusy(false);
-    if (error) { setErr(error.message ?? 'Помилка реєстрації'); return; }
-    // Сесії ще нема (потрібне підтвердження пошти) — ведемо на сторінку «перевір пошту».
-    router.push(`/verify-email?email=${encodeURIComponent(email)}`);
-  }
+  if (!signupsClosed()) return <RegisterForm />;
 
   return (
     <main className="auth-wrap">
-      <h1>Реєстрація</h1>
-      <form onSubmit={onSubmit} className="auth-form">
-        <input name="name" placeholder="Імʼя стрімера" required minLength={2} />
-        <input name="email" type="email" placeholder="Email" required />
-        <input name="password" type="password" placeholder="Пароль (мін. 8)" required minLength={8} />
-        <label className="auth-check">
-          <input type="checkbox" checked={joinGlobal} onChange={(e) => setJoinGlobal(e.target.checked)} />{' '}
-          Долучити мій збір до загальної мапи України
-        </label>
-        {err && <p className="auth-err">{err}</p>}
-        <button type="submit" disabled={busy}>{busy ? '…' : 'Створити акаунт'}</button>
-      </form>
+      <h1>Реєстрація закрита</h1>
+      <p>
+        GraMista зараз — <strong>закрита програма для невеликого кола стрімерів, яких я
+        знаю особисто</strong>. Це не публічний сервіс, і реєстрації «для всіх» поки немає.
+      </p>
+      <p>
+        Чому так: сервіс працює через персональне API monobank, а для відкритого сервісу
+        потрібен корпоративний (провайдерський) доступ, якого в нас поки немає. Тому коло
+        учасників обмежене — так, як це дозволяють правила monobank.
+      </p>
+      <p>
+        <strong>Хочеш приєднатися?</strong> Напиши мені особисто в{' '}
+        <a href="https://t.me/OrestBorykva" target="_blank" rel="noopener noreferrer">
+          Telegram
+        </a>{' '}
+        — поговоримо, і якщо домовимось, підключу вручну.
+      </p>
+      <p>
+        <small>
+          Важливо: участь — на власний ризик. monobank може вимкнути сповіщення банки,
+          якщо вважатиме таке використання персонального API неприйнятним. Самій банці та
+          грошам це нічим не загрожує — максимум доведеться перепідключитись. Варіант без
+          ризиків — розгорнути GraMista на власному сервері: код відкритий.
+        </small>
+      </p>
       <p>Вже є акаунт? <Link href="/login">Увійти</Link></p>
     </main>
   );

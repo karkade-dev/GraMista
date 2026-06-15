@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { processDonation } from './ingest';
-import { encodeDonationNotify } from './notify';
+import { notifyDonation } from './notify';
 
 // Вебхук персонального API monobank НЕ підписаний — автентичність тримається на
 // секретному URL (capability), цілість — на фільтрах нижче + ідемпотентності
@@ -96,6 +96,6 @@ export async function handleMonoEvent(
     sourceId: source.id,
   });
   await db.donationSource.update({ where: { id: source.id }, data: { lastEventAt: new Date() } });
-  await db.$executeRaw`SELECT pg_notify('donation', ${encodeDonationNotify(source.userId, item.id)})`;
+  await notifyDonation(db, source.userId, item.id);
   return 'processed';
 }

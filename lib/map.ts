@@ -8,6 +8,8 @@ export interface MapPoint {
   lat: number;
   lon: number;
   points: number;
+  /** Закордонне місто (country !== 'UA') — для бірюзового стилю крапки на мапі. */
+  abroad: boolean;
 }
 
 /** Дані для «спалаху» міста на мапі на новий донат (варіант Б: кільце + плашка). */
@@ -19,6 +21,8 @@ export interface DonationFlash {
   amountUah: number;
   /** Донат відкрив місто (перший бал у зборі) — для святкового спалаху/тосту. */
   newCity: boolean;
+  /** Закордонне місто — для бірюзового спалаху. */
+  abroad: boolean;
 }
 
 const ZERO = new Prisma.Decimal(0);
@@ -38,11 +42,15 @@ export async function donationFlash(
       id: true,
       amount: true,
       collectionId: true,
-      settlement: { select: { id: true, name: true, lat: true, lon: true } },
+      settlement: { select: { id: true, name: true, lat: true, lon: true, country: true } },
+      user: { select: { abroadWorldMap: true } },
     },
   });
   const s = d?.settlement;
   if (!s || s.lat == null || s.lon == null) return null;
+  const abroad = s.country !== 'UA';
+  // Закордонна крапка спалахує лише коли стрімер увімкнув світову мапу (інакше — порожнеча за межами України).
+  if (abroad && !d!.user.abroadWorldMap) return null;
   const openers = await cityOpeners(db, userId, [{ settlementId: s.id, collectionId: d!.collectionId }]);
   return {
     settlementId: s.id,
@@ -51,6 +59,7 @@ export async function donationFlash(
     lon: s.lon,
     amountUah: d!.amount.toNumber(),
     newCity: openers.get(openerKey(s.id, d!.collectionId)) === d!.id,
+    abroad,
   };
 }
 
@@ -86,7 +95,7 @@ export async function mapPoints(
   db: PrismaClient,
   userId: string,
   window: PeriodWindow = {},
-  scope: { streamId?: string; collectionId?: string } = {},
+  scope: { streamId?: string; collectionId?: string; includeAbroad?: boolean } = {},
 ): Promise<MapPoint[]> {
   const createdAt = createdAtWhere(window);
   const where = scope.streamId
@@ -103,8 +112,8 @@ export async function mapPoints(
   if (withPoints.length === 0) return [];
 
   const settlements = await db.settlement.findMany({
-    where: { id: { in: withPoints.map((g) => g.settlementId) } },
-    select: { id: true, name: true, lat: true, lon: true },
+    where: { id: { in: withPoints.map((g) => g.settlementId) }, ...(scope.includeAbroad ? {} : { country: 'UA' }) },
+    select: { id: true, name: true, lat: true, lon: true, country: true },
   });
   const meta = new Map(settlements.map((s) => [s.id, s]));
 
@@ -112,7 +121,7 @@ export async function mapPoints(
   for (const g of withPoints) {
     const s = meta.get(g.settlementId);
     if (!s || s.lat == null || s.lon == null) continue; // без координат на мапу не виводимо
-    out.push({ id: s.id, name: s.name, lat: s.lat, lon: s.lon, points: (g._sum.points ?? ZERO).toNumber() });
+    out.push({ id: s.id, name: s.name, lat: s.lat, lon: s.lon, points: (g._sum.points ?? ZERO).toNumber(), abroad: s.country !== 'UA' });
   }
   return out;
 }

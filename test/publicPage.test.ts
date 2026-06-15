@@ -142,3 +142,35 @@ test('getPublicPageCached: maxAgeMs:0 обходить кеш; невідоми�
   await testDb.user.update({ where: { id: U }, data: { handle: 'pptest' } });
   bustPublicPage('no-such-streamer');
 });
+
+test('getPublicPage: активний збір показує displayed (seed+донати); «загалом» — без seed', async () => {
+  await resetDynamic();
+  const c = await testDb.collection.create({ data: { userId: U, name: 'Прод', goalUah: 1000, seedUah: 200, status: 'active' } });
+  await applyDonation(testDb, U, { externalId: 'sd1', donorName: 'A', amountUah: 300, message: '' }, 'kyiv', null, { collectionId: c.id });
+  const page = await getPublicPage(testDb, 'pptest');
+  assert.ok(page);
+  assert.equal(page!.activeCollection!.displayedUah, 500, 'seed + донати');
+  assert.equal(page!.activeCollection!.raisedUah, 300, 'реальні донати — без seed');
+  assert.equal(page!.totalAllTimeUah, 300, '«зібрано загалом» — без стартової суми');
+});
+
+test('getPublicPage: минулий збір у списку показує displayed (seed+донати)', async () => {
+  await resetDynamic();
+  const c = await testDb.collection.create({ data: { userId: U, name: 'МинулийСтарт', seedUah: 400, status: 'completed', endAt: new Date() } });
+  await applyDonation(testDb, U, { externalId: 'pc1', donorName: 'A', amountUah: 100, message: '' }, 'kyiv', null, { collectionId: c.id });
+  const page = await getPublicPage(testDb, 'pptest');
+  const past = page!.pastCollections.find((p) => p.name === 'МинулийСтарт');
+  assert.equal(past!.raisedUah, 500, 'seed + донати в списку минулих');
+});
+
+test('getPublicCollectionArchive: «Зібрано» показує displayed (seed+донати)', async () => {
+  await resetDynamic();
+  const c = await testDb.collection.create({
+    data: { userId: U, name: 'АрхівСтарт', goalUah: 1000, seedUah: 100, status: 'completed', endAt: new Date() },
+  });
+  await applyDonation(testDb, U, { externalId: 'sa1', donorName: 'A', amountUah: 250, message: '' }, 'kyiv', null, { collectionId: c.id });
+  const arch = await getPublicCollectionArchive(testDb, 'pptest', c.id);
+  assert.ok(arch);
+  assert.equal(arch!.raisedUah, 350, 'seed + донати');
+  assert.equal(arch!.donationCount, 1, 'к-сть донатів — реальна');
+});

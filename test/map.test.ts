@@ -60,7 +60,8 @@ function countingDb(rows: () => unknown): { db: PrismaClient; queries: () => num
 test('donationFlashShared: N паралельних підписників на той самий донат → ОДИН запит у БД', async () => {
   const { db, queries } = countingDb(() => ({
     amount: new Prisma.Decimal(100),
-    settlement: { id: 'lviv', name: 'Львів', lat: 49.8, lon: 24.0 },
+    settlement: { id: 'lviv', name: 'Львів', lat: 49.8, lon: 24.0, country: 'UA' },
+    user: { abroadWorldMap: false },
   }));
 
   // Усі 50 викликів стартують синхронно (як фан-аут donationBus в один тік).

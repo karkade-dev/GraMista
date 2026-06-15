@@ -6,6 +6,8 @@ import { PrismaClient, type Prisma } from '@prisma/client';
 import { parseKatottgCsv, mapSettlements, type ImportSettlement } from '../lib/etl/katottg';
 import { parseGeonames, buildGeoIndex, type GeoEnrich } from '../lib/etl/geonames';
 import { collectGeoForms } from '../lib/etl/vesum';
+import { buildWorldSettlements } from '../lib/etl/worldCities';
+import { buildCentroidIndex, centroidFor } from '../lib/etl/centroid';
 import { normalize } from '../lib/text';
 
 // Імпорт повного довідника НП (КАТОТТГ + GeoNames + ВЕСУМ) у Settlement/SettlementAlias.
@@ -17,6 +19,8 @@ import { normalize } from '../lib/text';
 //   katottg.csv        https://github.com/mykhailoklimnyk/ua-administrative-codes/releases/download/0.1.0/katottg.csv
 //   UA.txt             з архіву https://download.geonames.org/export/dump/UA.zip
 //   dict_corp_vis.txt  розпакований https://github.com/brown-uk/dict_uk/releases/download/v6.8.0/dict_corp_vis.txt.bz2
+//   cities15000.txt        з архіву https://download.geonames.org/export/dump/cities15000.zip
+//   alternateNamesV2.txt   з архіву https://download.geonames.org/export/dump/alternateNamesV2.zip
 const SRC = join(process.cwd(), 'data', 'sources');
 const prisma = new PrismaClient();
 
@@ -47,7 +51,7 @@ async function main(): Promise<void> {
   const existing = await prisma.settlement.findMany({
     select: {
       id: true, katottg: true, nameNorm: true, oblast: true,
-      lat: true, lon: true, population: true, raion: true, hromada: true, type: true,
+      lat: true, lon: true, coordsDerived: true, population: true, raion: true, hromada: true, type: true,
     },
   });
   const byKatottg = new Map(existing.filter((e) => e.katottg).map((e) => [e.katottg as string, e] as const));
@@ -68,8 +72,10 @@ async function main(): Promise<void> {
   for (const s of settlements) {
     const key = `${s.nameNorm}|${s.oblast}`;
     const enrich = geo.get(key);
-    const lat = enrich && !enrich.ambiguous ? enrich.lat : null;
-    const lon = enrich && !enrich.ambiguous ? enrich.lon : null;
+    // coordsReliable: одинокий НП або тезка-лідер за населенням. Решту (лідера нема) лишаємо
+    // без координат — другим проходом їх поставить центроїд громади.
+    const lat = enrich?.coordsReliable ? enrich.lat : null;
+    const lon = enrich?.coordsReliable ? enrich.lon : null;
     const population = enrich?.population ?? null;
 
     const legacy = bestForLegacy.get(key) === s ? legacyByKey.get(key) : undefined;
@@ -81,9 +87,11 @@ async function main(): Promise<void> {
       if (!ex.raion && s.raion) data.raion = s.raion;
       if (!ex.hromada && s.hromada) data.hromada = s.hromada;
       if (!ex.type && s.type) data.type = s.type;
-      if (ex.lat == null && lat != null) {
+      // Справжня точка GeoNames перекриває як порожнечу, так і раніше виведений центроїд.
+      if (lat != null && (ex.lat == null || ex.coordsDerived)) {
         data.lat = lat;
         data.lon = lon;
+        if (ex.coordsDerived) data.coordsDerived = false;
       }
       if (ex.population == null && population != null) data.population = population;
       if (Object.keys(data).length > 0) {
@@ -103,8 +111,68 @@ async function main(): Promise<void> {
   }
   console.log(`[import] НП: +${toCreate.length} нових · ${updated} оновлено · ${unchanged} без змін`);
 
-  // Аліаси: перебудовуємо ЛИШЕ vesum/geonames (seed/manual — ручна робота, недоторканна).
-  await prisma.settlementAlias.deleteMany({ where: { source: { in: ['vesum', 'geonames'] } } });
+  // Іноземні НП (GeoNames cities + alternateNamesV2). Ідемпотентно за id = 'g'+geonameid.
+  // Лишаємо лише міста з українською назвою (кирилице-only). Їхні відмінки причепить нижчий
+  // ВЕСУМ-крок (їхній nameNorm входить у idsByNameNorm).
+  const citiesPath = join(SRC, 'cities15000.txt');
+  const altPath = join(SRC, 'alternateNamesV2.txt');
+  const worldAliasRows: Prisma.SettlementAliasCreateManyInput[] = [];
+  if (existsSync(citiesPath) && existsSync(altPath)) {
+    const world = buildWorldSettlements(readFileSync(citiesPath, 'utf8'), readFileSync(altPath, 'utf8'));
+    const existingWorld = new Set(
+      (await prisma.settlement.findMany({ where: { id: { startsWith: 'g' } }, select: { id: true } })).map((s) => s.id),
+    );
+    const toCreateWorld: Prisma.SettlementCreateManyInput[] = world
+      .filter((w) => !existingWorld.has(w.id))
+      .map((w) => ({ id: w.id, name: w.name, nameNorm: w.nameNorm, country: w.country, lat: w.lat, lon: w.lon, population: w.population }));
+    for (const batch of chunks(toCreateWorld, 2000)) {
+      await prisma.settlement.createMany({ data: batch, skipDuplicates: true });
+    }
+    for (const w of world) {
+      for (const a of w.aliases) {
+        const aliasNorm = normalize(a);
+        if (aliasNorm && aliasNorm !== w.nameNorm) {
+          worldAliasRows.push({ settlementId: w.id, alias: a, aliasNorm, source: 'geonames-world' });
+        }
+      }
+    }
+    console.log(`[import] світ: +${toCreateWorld.length} НП · ${worldAliasRows.length} аліасів`);
+  } else {
+    console.warn('[import] cities15000.txt/alternateNamesV2.txt не знайдено — без закордонних міст');
+  }
+
+  // Центроїд громади для НП БЕЗ власних координат (нема в GeoNames або тезки без лідера).
+  // Опори — лише СПРАВЖНІ точки (coordsDerived=false), щоб центроїди не дрейфували від себе.
+  // Україна-only: закордонні НП (oblast=null) сюди не входять. Раніше виведені центроїди
+  // перераховуються щоразу — імпорт сходиться й лишається ідемпотентним.
+  const uaForCentroid = await prisma.settlement.findMany({
+    where: { country: 'UA' },
+    select: { id: true, oblast: true, raion: true, hromada: true, lat: true, lon: true, coordsDerived: true },
+  });
+  const centroidIdx = buildCentroidIndex(
+    uaForCentroid.filter((s) => s.lat != null && s.lon != null && !s.coordsDerived),
+  );
+  const centroidUpdates: { id: string; lat: number; lon: number }[] = [];
+  for (const s of uaForCentroid) {
+    if (s.lat != null && s.lon != null && !s.coordsDerived) continue; // має справжню точку
+    const c = centroidFor(s, centroidIdx);
+    if (!c) continue;
+    if (s.coordsDerived && s.lat != null && Math.abs(s.lat - c.lat) < 1e-9 && Math.abs((s.lon ?? 0) - c.lon) < 1e-9) {
+      continue; // центроїд не змінився — не чіпаємо (ідемпотентність)
+    }
+    centroidUpdates.push({ id: s.id, lat: c.lat, lon: c.lon });
+  }
+  for (const batch of chunks(centroidUpdates, 100)) {
+    await Promise.all(
+      batch.map((u) =>
+        prisma.settlement.update({ where: { id: u.id }, data: { lat: u.lat, lon: u.lon, coordsDerived: true } }),
+      ),
+    );
+  }
+  console.log(`[import] центроїд громади/району: ${centroidUpdates.length} НП без власних координат`);
+
+  // Аліаси: перебудовуємо ЛИШЕ vesum/geonames/geonames-world (seed/manual — ручна робота, недоторканна).
+  await prisma.settlementAlias.deleteMany({ where: { source: { in: ['vesum', 'geonames', 'geonames-world'] } } });
 
   const all = await prisma.settlement.findMany({ select: { id: true, nameNorm: true, oblast: true } });
   const idsByNameNorm = new Map<string, string[]>();
@@ -150,6 +218,9 @@ async function main(): Promise<void> {
     if (!enrich) continue;
     for (const a of enrich.aliasCandidates) pushAlias(s.id, a, 'geonames');
   }
+
+  // Аліаси іноземних НП (geonames-world) — додаємо до спільного пакету.
+  for (const row of worldAliasRows) aliasRows.push(row);
 
   for (const batch of chunks(aliasRows, 5000)) {
     await prisma.settlementAlias.createMany({ data: batch });

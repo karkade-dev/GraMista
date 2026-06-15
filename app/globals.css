@@ -414,6 +414,7 @@ select.fld { cursor: pointer; }
 
 .card { background: var(--card); border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 16px 16px 14px; display: flex; flex-direction: column; min-height: 0; }
 .card-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.card-actions { display: flex; align-items: center; gap: 8px; }
 .card-title { font-family: "Manrope", sans-serif; font-weight: 700; font-size: 14.5px; letter-spacing: .2px; display: flex; align-items: center; gap: 8px; }
 .card-title .ic { font-size: 15px; opacity: .95; }
 .card-hint { font-size: 11px; color: var(--ink-3); white-space: nowrap; }
@@ -551,11 +552,13 @@ select.fld { cursor: pointer; }
 .d-sum { margin-left: auto; font-weight: 700; font-size: 14px; color: var(--ink); font-variant-numeric: tabular-nums; flex: none; }
 .d-meta { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--ink-3); margin-top: 2px; }
 .d-meta .place { color: var(--ink-2); }
+.d-comment { font-size: 12.5px; color: var(--ink-2); margin-top: 3px; line-height: 1.35; overflow-wrap: anywhere; }
 .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; margin-top: 5px; }
 .badge.add { color: var(--accent-soft); background: rgba(208, 135, 90, .12); }
 .badge.pot { color: #B9C595; background: rgba(140, 154, 107, .14); }
 .badge.none { color: var(--ink-3); background: rgba(154, 137, 121, .12); }
 .badge.newcity { color: #241E19; background: linear-gradient(180deg, var(--gold), var(--accent)); font-weight: 700; }
+.badge.abroad { color: #9FC7CE; background: rgba(108, 168, 178, .14); }
 .donate.opener { background: rgba(224, 182, 107, .07); border-radius: 10px; box-shadow: inset 3px 0 0 var(--gold); padding-left: 8px; }
 .feed-more { flex: none; margin-top: 12px; }
 .btn-more { width: 100%; background: transparent; border: 1px solid var(--line); color: var(--ink-3); font-family: inherit; font-size: 12.5px; font-weight: 600; padding: 10px; border-radius: 11px; cursor: pointer; transition: .16s; }
@@ -578,6 +581,11 @@ select.fld { cursor: pointer; }
 .top-actions > summary::-webkit-details-marker { display: none; }
 .ta-inner { display: flex; align-items: center; gap: 10px; }
 .top-actions > .ta-inner { display: flex; } /* специфічніше за UA-правило прихову закритого <details> */
+/* Chromium 131+ ховає вміст закритого <details> через content-visibility:hidden на
+   ::details-content (а не display:none), тож правило вище це вже не перебивало — і керування
+   стрімом зникло з десктоп-шапки. Повертаємо вміст. На телефоні безпечно: там .ta-inner
+   лишається display:none, поки <details> закритий (медіазапит нижче). */
+.app .top-actions::details-content { content-visibility: visible; }
 .ta-btn { display: inline-flex; align-items: center; gap: 6px; font-family: inherit; font-size: 12.5px; font-weight: 600; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); background: var(--card); white-space: nowrap; cursor: pointer; transition: .16s; }
 .top-actions[open] > summary .ta-btn { border-color: var(--accent-deep); color: var(--ink); }
 
@@ -686,6 +694,7 @@ select.fld { cursor: pointer; }
   color: var(--ink-2); font-family: ui-monospace, "SF Mono", monospace; font-size: 11.5px; padding: 7px 9px;
 }
 .ovb-url input:focus { outline: none; border-color: var(--accent-deep); }
+.dock-warn { margin: 0; padding: 8px 10px; font-size: 12px; line-height: 1.4; color: var(--ink-2); background: var(--card-2); border: 1px solid var(--line); border-radius: 10px; }
 
 /* Сторінки входу/реєстрації (поза панеллю) — тон теплої палітри. */
 .auth-wrap { max-width: 360px; margin: 8vh auto; display: flex; flex-direction: column; gap: 16px; padding: 0 16px; }

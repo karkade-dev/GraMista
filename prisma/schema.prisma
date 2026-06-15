@@ -36,6 +36,10 @@ model User {
   // Публічний слаг (адреса /<стрімер> §18). Capability-токен оверлеїв (як StreamElements).
   handle         String?  @unique
   overlayKey     String?  @unique
+  // Окремий capability-ключ донат-доку /dock (НЕ overlayKey: док показує повні імена +
+  // сирі коментарі = PII; overlayKey документований як «лише публічні дані»). Дзеркало
+  // overlayKey: ensureDockKey/regenerateDockKey у lib/publicUser.
+  dockKey        String?  @unique
   monobankJarUrl String?
   twitchUrl      String?
   youtubeUrl     String?
@@ -59,6 +63,14 @@ model User {
   bannedWordsAllowed String  @default("")
   // Показувати коментарі донатів у стрічці публічної сторінки /<handle>.
   showCommentPublic  Boolean @default(true)
+  // Розпізнавати закордонні міста (опт-ін, дефолт — вимкнено). Решта abroad-полів діє лише коли true.
+  abroadCities        Boolean @default(false)
+  // Показувати закордон на мапі (окремий шар світу). Вимкнено — мапа лишається суто українською.
+  abroadWorldMap      Boolean @default(false)
+  // Топ закордонних міст: 'shared' (разом з UA) | 'separate' (окремий список «Світ»).
+  abroadTopMode       String  @default("separate")
+  // Не зараховувати міста рф/рб (дефолт — зараховувати).
+  abroadHideAggressor Boolean @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -166,6 +178,12 @@ model Settlement {
   population Int?
   lat        Float?
   lon        Float?
+  // Координати — центроїд громади/району (НП нема в GeoNames), а не власна точка. Такі можна
+  // перерахувати/перекрити справжніми при повторному імпорті; справжні (GeoNames/seed) — ні.
+  coordsDerived Boolean @default(false)
+  // Країна НП у форматі ISO-3166-1 alpha-2 ('UA' — Україна; 'PL'/'DE'/'RU'/'BY'/… — закордон).
+  // Існуючим 29 242 НП міграція проставляє 'UA' дефолтом NOT NULL (без окремого backfill).
+  country    String  @default("UA")
 
   aliases     SettlementAlias[]
   donations   Donation[]
@@ -173,6 +191,7 @@ model Settlement {
   pointEvents PointEvent[]
 
   @@index([nameNorm])
+  @@index([country])
   @@index([nameNorm(ops: raw("gin_trgm_ops"))], type: Gin, map: "Settlement_nameNorm_trgm")
 }
 
@@ -312,6 +331,8 @@ model Collection {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String
   goalUah   Decimal?  @db.Decimal(12, 2)
+  // Стартова сума («Вже зібрано») — цифра для показу бара, не реальні гроші. 0 = нема.
+  seedUah   Decimal   @db.Decimal(12, 2) @default(0)
   startAt   DateTime  @default(now())
   endAt     DateTime?
   status    String    @default("active")

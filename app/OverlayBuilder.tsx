@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { CopyButton } from '@/app/CopyButton';
 
-type Ctrl = 'style' | 'period' | 'rows' | 'sort' | 'feed' | 'scale' | 'chroma' | 'title' | 'comment';
+type Ctrl = 'style' | 'period' | 'rows' | 'sort' | 'scope' | 'feed' | 'scale' | 'chroma' | 'title' | 'comment';
 interface Widget {
   path: string;
   label: string;
@@ -12,7 +12,7 @@ interface Widget {
 }
 
 const WIDGETS: Widget[] = [
-  { path: 'top', label: 'Топ міст', icon: '🏆', ctrls: ['style', 'period', 'rows', 'sort', 'scale', 'chroma', 'title'], defPeriod: 'collection' },
+  { path: 'top', label: 'Топ міст', icon: '🏆', ctrls: ['style', 'period', 'rows', 'sort', 'scope', 'scale', 'chroma', 'title'], defPeriod: 'collection' },
   { path: 'feed', label: 'Донати', icon: '💛', ctrls: ['style', 'period', 'feed', 'comment', 'rows', 'scale', 'chroma', 'title'], defPeriod: 'collection' },
   { path: 'raised', label: 'Зібрано', icon: '💰', ctrls: ['style', 'period', 'scale', 'chroma', 'title'], defPeriod: 'stream' },
   { path: 'goal', label: 'Прогрес збору', icon: '🎯', ctrls: ['style', 'scale', 'chroma', 'title'] },
@@ -24,6 +24,7 @@ const OPTIONS: Record<Ctrl, { label: string; values: [string, string][] } | 'row
   style: { label: 'Стиль', values: [['glass', 'Скло'], ['solid', 'Щільне'], ['minimal', 'Мінімал']] },
   period: { label: 'Період', values: [['collection', 'Збір'], ['stream', 'Стрім'], ['week', 'Тиждень'], ['month', 'Місяць'], ['all', 'Весь час']] },
   sort: { label: 'Порядок', values: [['desc', 'Більші зверху'], ['asc', 'Менші зверху']] },
+  scope: { label: 'Міста', values: [['ua', 'Україна'], ['abroad', 'Закордон'], ['both', 'Разом']] },
   feed: { label: 'Вигляд', values: [['card', 'Картка'], ['list', 'Список']] },
   chroma: { label: 'Фон', values: [['none', 'Прозорий'], ['green', 'Зелений'], ['blue', 'Синій'], ['magenta', 'Малиновий']] },
   rows: 'rows',

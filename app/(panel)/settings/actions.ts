@@ -6,7 +6,7 @@ import { prisma } from '@/lib/db';
 import { requireUserId } from '@/lib/session';
 import { fetchJars, setWebhook, MonoApiError } from '@/lib/monobank';
 import { validateHandle } from '@/lib/handle';
-import { regenerateOverlayKey, userIdByHandle } from '@/lib/publicUser';
+import { regenerateOverlayKey, regenerateDockKey, userIdByHandle } from '@/lib/publicUser';
 import { parseWordList } from '@/lib/censor';
 import { BASE_BANNED } from '@/lib/censorWords';
 
@@ -21,18 +21,31 @@ const profileSchema = z.object({
   // Чекбокс HTML-форми: 'on' коли увімкнено, відсутній — коли ні.
   publicShowStreams: z.literal('on').optional(),
   showOnGlobalMap: z.literal('on').optional(),
+  abroadCities: z.literal('on').optional(),
+  abroadWorldMap: z.literal('on').optional(),
+  abroadTopMode: z.enum(['shared', 'separate']).optional(),
+  abroadHideAggressor: z.literal('on').optional(),
 });
 
 export async function saveProfileAction(formData: FormData): Promise<void> {
   const U = await requireUserId();
   const parsed = profileSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
-  const data: { monobankJarUrl: string | null; twitchUrl: string | null; youtubeUrl: string | null; publicShowStreams: boolean; showOnGlobalMap: boolean; handle?: string } = {
+  const data: {
+    monobankJarUrl: string | null; twitchUrl: string | null; youtubeUrl: string | null;
+    publicShowStreams: boolean; showOnGlobalMap: boolean;
+    abroadCities: boolean; abroadWorldMap: boolean; abroadTopMode: string; abroadHideAggressor: boolean;
+    handle?: string;
+  } = {
     monobankJarUrl: parsed.data.monobankJarUrl || null,
     twitchUrl: parsed.data.twitchUrl || null,
     youtubeUrl: parsed.data.youtubeUrl || null,
     publicShowStreams: parsed.data.publicShowStreams === 'on',
     showOnGlobalMap: parsed.data.showOnGlobalMap === 'on',
+    abroadCities: parsed.data.abroadCities === 'on',
+    abroadWorldMap: parsed.data.abroadWorldMap === 'on',
+    abroadTopMode: parsed.data.abroadTopMode ?? 'separate',
+    abroadHideAggressor: parsed.data.abroadHideAggressor === 'on',
   };
   if (parsed.data.handle) {
     const v = validateHandle(parsed.data.handle);
@@ -192,6 +205,13 @@ export async function disconnectMonoAction(): Promise<void> {
 export async function regenerateOverlayAction(): Promise<void> {
   const U = await requireUserId();
   await regenerateOverlayKey(prisma, U);
+  revalidatePath('/settings');
+  revalidatePath('/overlays');
+}
+
+export async function regenerateDockAction(): Promise<void> {
+  const U = await requireUserId();
+  await regenerateDockKey(prisma, U);
   revalidatePath('/settings');
   revalidatePath('/overlays');
 }

@@ -21,7 +21,14 @@ export async function moveDonationAction(formData: FormData): Promise<void> {
     externalId: formData.get('externalId'),
     streamId: formData.get('streamId'),
   });
-  await moveDonationToStream(prisma, U, externalId, streamId);
+  const moved = await moveDonationToStream(prisma, U, externalId, streamId);
+  if (!moved) {
+    // Не приховуємо провал: нормальним UI-шляхом недосяжно (донат і стрім беруться з
+    // відрендереної сторінки під тим самим userId) — false означає застарілий список
+    // або стрім, видалений в іншій вкладці. Дані не змінились → ревалідувати нічого.
+    console.error('[moveDonationAction] донат або стрім не знайдено', { userId: U, externalId, streamId });
+    return;
+  }
   // бали міняють приналежність стрімам → впливає на топ стрімів/збори; шапка теж читає стрім
   revalidatePath('/', 'layout');
 }

@@ -49,11 +49,13 @@ export function MonoConnect({ connected, title }: { connected: boolean; title: s
           <input type="hidden" name="token" value={token} />
           <input type="hidden" name="jarId" value={jar?.id ?? ''} />
           <input type="hidden" name="jarTitle" value={jar?.title ?? ''} />
-          {listState.jars.map((j) => (
-            <label key={j.id}>
-              <input type="radio" name="jarPick" checked={jar?.id === j.id} onChange={() => setJar(j)} /> {j.title}
-            </label>
-          ))}
+          <div className="set-group">
+            {listState.jars.map((j) => (
+              <label key={j.id} className="set-row">
+                <input type="radio" name="jarPick" checked={jar?.id === j.id} onChange={() => setJar(j)} /> {j.title}
+              </label>
+            ))}
+          </div>
           <button type="submit" disabled={!jar || connecting}>
             {connecting ? 'Підключаємо…' : 'Підключити цю банку'}
           </button>

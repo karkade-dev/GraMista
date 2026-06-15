@@ -18,6 +18,8 @@ export interface CollectionInput {
   name: string;
   /** Ціль-сума необов'язкова: серію-змагання можна вести й без грошової цілі. */
   goalUah?: number | null;
+  /** Стартова сума («Вже зібрано»); 0 або відсутність — без стартової суми. */
+  seedUah?: number | null;
   startAt?: Date;
   endAt?: Date | null;
 }
@@ -27,9 +29,16 @@ export interface CollectionRow {
   name: string;
   /** null — збір без грошової цілі (прогрес-бар не показується). */
   goalUah: number | null;
+  /** Реальні донати збору (через токен monobank) — НЕ враховує стартову суму; це й читає /ukraine. */
   raisedUah: number;
+  /** Стартова сума («Вже зібрано») — лише для показу бара, не реальні гроші. 0, якщо нема. */
+  seedUah: number;
+  /** Показове «накопичено» = seedUah + raisedUah (власні вікна стрімера; НЕ /ukraine). */
+  displayedUah: number;
   /** 0..100, обмежено для прогрес-бара (фактичний може бути >100); 0 коли цілі нема. */
   percent: number;
+  /** % цілі від displayedUah (кеп 100); 0 без цілі. Бар власних вікон бере саме його. */
+  displayedPercent: number;
   status: string;
   startAt: Date;
   endAt: Date | null;
@@ -45,14 +54,20 @@ export async function collectionSummary(db: PrismaClient, userId: string, c: Col
     leaderboard(db, userId, { collectionId: c.id, limit: 3 }),
   ]);
   const raisedUah = agg._sum.amount?.toNumber() ?? 0;
+  const seedUah = c.seedUah?.toNumber() ?? 0;
+  const displayedUah = seedUah + raisedUah;
   const goalUah = c.goalUah?.toNumber() ?? null;
   const percent = goalUah && goalUah > 0 ? Math.min(100, (raisedUah / goalUah) * 100) : 0;
+  const displayedPercent = goalUah && goalUah > 0 ? Math.min(100, (displayedUah / goalUah) * 100) : 0;
   return {
     id: c.id,
     name: c.name,
     goalUah,
     raisedUah,
+    seedUah,
+    displayedUah,
     percent,
+    displayedPercent,
     status: c.status,
     startAt: c.startAt,
     endAt: c.endAt,
@@ -63,10 +78,10 @@ export async function collectionSummary(db: PrismaClient, userId: string, c: Col
 
 /** Текст звіту-посту по збору (для копіювання й публікації) — §17.4. Відсоток — фактичний (може >100). */
 export function collectionReportText(c: CollectionRow): string {
-  const pct = c.goalUah && c.goalUah > 0 ? Math.round((c.raisedUah / c.goalUah) * 100) : 0;
+  const pct = c.goalUah && c.goalUah > 0 ? Math.round((c.displayedUah / c.goalUah) * 100) : 0;
   const sumLine = c.goalUah
-    ? `💰 Зібрано ${formatUah(c.raisedUah)} з ${formatUah(c.goalUah)} (${pct}%)`
-    : `💰 Зібрано ${formatUah(c.raisedUah)}`;
+    ? `💰 Зібрано ${formatUah(c.displayedUah)} з ${formatUah(c.goalUah)} (${pct}%)`
+    : `💰 Зібрано ${formatUah(c.displayedUah)}`;
   const lines = [`🎯 ${c.name}`, sumLine];
   if (c.topCities.length > 0) {
     lines.push(
@@ -169,6 +184,7 @@ export async function createCollection(db: PrismaClient, userId: string, input: 
       userId,
       name: input.name.trim() || 'Збір',
       goalUah: input.goalUah != null ? new Prisma.Decimal(input.goalUah) : null,
+      seedUah: new Prisma.Decimal(input.seedUah ?? 0),
       ...(input.startAt ? { startAt: input.startAt } : {}),
       ...(input.endAt !== undefined ? { endAt: input.endAt } : {}),
       status: COLLECTION_STATUS.paused,
@@ -181,7 +197,7 @@ export async function updateCollection(
   db: PrismaClient,
   userId: string,
   id: string,
-  patch: { name?: string; goalUah?: number | null; endAt?: Date | null; status?: CollectionStatus },
+  patch: { name?: string; goalUah?: number | null; seedUah?: number; endAt?: Date | null; status?: CollectionStatus },
 ): Promise<boolean> {
   const c = await db.collection.findFirst({ where: { id, userId }, select: { id: true } });
   if (!c) return false;
@@ -191,6 +207,7 @@ export async function updateCollection(
       ...(patch.name?.trim() ? { name: patch.name.trim() } : {}),
       // undefined — не чіпаємо ціль; null — прибрати ціль (збір без грошової цілі).
       ...(patch.goalUah !== undefined ? { goalUah: patch.goalUah != null ? new Prisma.Decimal(patch.goalUah) : null } : {}),
+      ...(patch.seedUah !== undefined ? { seedUah: new Prisma.Decimal(patch.seedUah) } : {}),
       ...(patch.endAt !== undefined ? { endAt: patch.endAt } : {}),
       ...(patch.status ? { status: patch.status } : {}),
     },

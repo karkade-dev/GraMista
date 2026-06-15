@@ -71,6 +71,13 @@
 }
 .pub-tfoot button:hover { color: var(--accent-soft); border-color: var(--accent); }
 
+/* Розділ «Міста України» + «Світ / Діаспора» (два TopList поруч при abroadRows) */
+.pub-topsplit { display: flex; flex-direction: column; gap: 18px; }
+.pub-topcap { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-3); margin-bottom: 8px; display: flex; align-items: center; gap: 7px; }
+.pub-topcap::before { content: ''; width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.pub-topcap-ua::before { background: var(--gold); }
+.pub-topcap-abroad::before { background: #5DCAA5; }
+
 /* Пошук свого міста (T6) */
 .pub-seek { margin-top: 8px; padding: 0 2px; }
 .pub-seek input {
@@ -95,6 +102,11 @@
 .pub-frow .ncty {
   flex: none; font: 700 10.5px Onest, sans-serif; color: #241E19;
   background: linear-gradient(180deg, var(--gold), var(--accent)); border-radius: 999px;
+  padding: 2px 8px; white-space: nowrap;
+}
+.pub-frow .acty {
+  flex: none; font: 700 10.5px Onest, sans-serif; color: #7FE0C2;
+  background: rgba(93, 202, 165, .13); border-radius: 999px;
   padding: 2px 8px; white-space: nowrap;
 }
 /* Коментар донату в публічній стрічці (тумблер showCommentPublic у Налаштуваннях) — другим рядком. */

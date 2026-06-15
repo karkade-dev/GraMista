@@ -47,8 +47,14 @@ export interface GeoEnrich {
   population: number | null;
   /** Кандидати в аліаси: кирилічні варіанти (укр/рос) + латинська назва. ≤6. */
   aliasCandidates: string[];
-  /** Кілька РІЗНИХ точок під одним ключем → координатам не довіряємо (lat/lon не використовувати). */
+  /** Кілька РІЗНИХ точок під одним ключем (тезки в одній області). */
   ambiguous: boolean;
+  /**
+   * Чи можна довіряти lat/lon: одинокий НП АБО серед тезок є ЧІТКИЙ лідер за населенням
+   * (тоді беремо точку лідера — напр. місто Долина проти сіл-тезок). false — лідера нема
+   * (рівне/нульове населення); тоді координат не виводимо, а імпорт ставить центр громади.
+   */
+  coordsReliable: boolean;
 }
 
 const CYRILLIC = /[а-яіїєґ]/i;
@@ -56,6 +62,11 @@ const CYRILLIC = /[а-яіїєґ]/i;
 /**
  * Індекс (нормалізована назва|область) → збагачення. Ключем стає КОЖЕН кирилічний варіант назви
  * (укр напис серед alternatenames — головний шлях зустрічі з КАТОТТГ-назвою).
+ *
+ * Тезки в одній області неминучі (ключ — лише назва+область, без району). Замість викидати
+ * координати в усіх, лишаємо точку НАЙБІЛЬШОГО за населенням НП: донат «Долина» розумніше
+ * показати на місті Долина (20 тис.), ніж ніде. Якщо лідера нема (усі без населення) —
+ * coordsReliable=false, і остаточну точку дасть центроїд громади на етапі імпорту.
  */
 export function buildGeoIndex(places: GeoPlace[]): Map<string, GeoEnrich> {
   const idx = new Map<string, GeoEnrich>();
@@ -68,10 +79,22 @@ export function buildGeoIndex(places: GeoPlace[]): Map<string, GeoEnrich> {
     for (const key of new Set(cyr.map((a) => `${normalize(a)}|${oblast}`))) {
       const prev = idx.get(key);
       if (!prev) {
-        idx.set(key, { lat: p.lat, lon: p.lon, population: pop, aliasCandidates, ambiguous: false });
+        idx.set(key, { lat: p.lat, lon: p.lon, population: pop, aliasCandidates, ambiguous: false, coordsReliable: true });
       } else if (Math.abs(prev.lat - p.lat) > 0.05 || Math.abs(prev.lon - p.lon) > 0.05) {
-        prev.ambiguous = true; // тезки в одній області — точку не вгадуємо
-        if ((pop ?? 0) > (prev.population ?? 0)) prev.population = pop; // tie-breaker — від більшого
+        prev.ambiguous = true; // тезки в одній області
+        const a = pop ?? 0;
+        const b = prev.population ?? 0;
+        if (a > b) {
+          // новий НП більший — він стає опорною точкою (чіткий лідер).
+          prev.lat = p.lat;
+          prev.lon = p.lon;
+          prev.population = pop;
+          prev.coordsReliable = true;
+        } else if (a === b) {
+          // рівне (часто 0=0) — лідера на вершині нема, координатам не довіряємо.
+          prev.coordsReliable = false;
+        }
+        // a < b — поточний лідер сильніший, лишаємо його (coordsReliable не змінюємо).
       }
     }
   }

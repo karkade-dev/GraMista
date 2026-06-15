@@ -7,9 +7,13 @@ import { requireUserId } from '@/lib/session';
 import { assignCity, assignCityBulk, reassignCity, adjustPoints, resetCity, resetAll } from '@/lib/admin';
 import { addAlias } from '@/lib/settlements';
 import { undoAdminAction } from '@/lib/adminLog';
+import { notifyDonation, notifyRefresh } from '@/lib/notify';
 
 // Тонкі Server Actions Адмінки (§17.5): Zod-валідація → lib/admin → ревалідація.
 // Дії змінюють бали → впливають на дашборд/мапу/топ, тож ревалідуємо весь layout.
+// revalidatePath оновлює лише власну вкладку стрімера; оверлеї/публічна/док живуть на SSE,
+// тож після зміни балів ще й будимо шину (notifyDonation/notifyRefresh) — інакше місто
+// з'являється в топі, але не «висвічується» на живій мапі.
 
 const AssignInput = z.object({ externalId: z.string().min(1), settlementId: z.string().min(1) });
 
@@ -22,6 +26,7 @@ export async function assignCityAction(formData: FormData): Promise<void> {
   });
   await assignCity(prisma, U, externalId, settlementId);
   revalidatePath('/', 'layout');
+  await notifyDonation(prisma, U, externalId); // спалах + поява міста на живій мапі
 }
 
 const ReassignInput = z.object({ externalId: z.string().min(1), settlementId: z.string().min(1) });
@@ -35,6 +40,7 @@ export async function reassignCityAction(formData: FormData): Promise<void> {
   });
   await reassignCity(prisma, U, externalId, settlementId);
   revalidatePath('/', 'layout');
+  await notifyDonation(prisma, U, externalId); // спалах нового міста; старе оновиться на refresh
 }
 
 const BulkAssignInput = z.object({
@@ -51,6 +57,7 @@ export async function bulkAssignCityAction(formData: FormData): Promise<void> {
   });
   await assignCityBulk(prisma, U, externalIds, settlementId);
   revalidatePath('/', 'layout');
+  await notifyRefresh(prisma, U); // пакетна дія: міста з'являються на мапі без спалаху кожного
 }
 
 const AdjustInput = z.object({
@@ -67,6 +74,7 @@ export async function adjustPointsAction(formData: FormData): Promise<void> {
   });
   await adjustPoints(prisma, U, settlementId, points);
   revalidatePath('/', 'layout');
+  await notifyRefresh(prisma, U); // змінились бали міста → мапа/топ оновлюються наживо
 }
 
 const AliasInput = z.object({
@@ -93,6 +101,7 @@ export async function resetCityAction(formData: FormData): Promise<void> {
   const { settlementId } = ResetCityInput.parse({ settlementId: formData.get('settlementId') });
   await resetCity(prisma, U, settlementId);
   revalidatePath('/', 'layout');
+  await notifyRefresh(prisma, U); // місто зникає з мапи/топу наживо
 }
 
 /** Скинути ВСІ бали + скарбнички (історія донатів і стріми лишаються). */
@@ -100,6 +109,7 @@ export async function resetAllAction(): Promise<void> {
   const U = await requireUserId();
   await resetAll(prisma, U);
   revalidatePath('/', 'layout');
+  await notifyRefresh(prisma, U); // мапа/топ очищаються наживо
 }
 
 const UndoInput = z.object({ id: z.string().min(1) });
@@ -110,4 +120,5 @@ export async function undoActionAction(formData: FormData): Promise<void> {
   const { id } = UndoInput.parse({ id: formData.get('id') });
   await undoAdminAction(prisma, U, id);
   revalidatePath('/', 'layout');
+  await notifyRefresh(prisma, U); // відкат міг змінити бали → мапа/топ оновлюються наживо
 }

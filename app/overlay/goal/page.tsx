@@ -28,16 +28,16 @@ export default async function GoalOverlay({ searchParams }: { searchParams: SP }
           {cs.goalUah != null ? (
             <>
               <div className="goal-bar">
-                <i style={{ width: `${cs.percent}%` }} />
+                <i style={{ width: `${cs.displayedPercent}%` }} />
               </div>
               <div className="goal-val">
-                <b>{formatUah(cs.raisedUah)}</b> / {formatUah(cs.goalUah)}{' '}
-                <span className="goal-pct">{Math.round(cs.percent)}%</span>
+                <b>{formatUah(cs.displayedUah)}</b> / {formatUah(cs.goalUah)}{' '}
+                <span className="goal-pct">{Math.round(cs.displayedPercent)}%</span>
               </div>
             </>
           ) : (
             <div className="goal-val">
-              <b>{formatUah(cs.raisedUah)}</b>
+              <b>{formatUah(cs.displayedUah)}</b>
             </div>
           )}
         </section>

@@ -12,7 +12,7 @@ const U = DEFAULT_USER_ID;
 
 // Хелпер для чистого тесту biggestRecentId (без БД).
 function rec(externalId: string, amountUah: number, at: number): RecentItem {
-  return { externalId, who: 'X', amountUah, message: '', city: null, points: 0, at, collectionId: null, newCity: false };
+  return { externalId, who: 'X', amountUah, message: '', city: null, points: 0, at, collectionId: null, newCity: false, abroad: false };
 }
 
 test('biggestRecentId: порожня стрічка → null', () => {

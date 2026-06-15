@@ -90,3 +90,13 @@ test('globalCityDetail: розбивка по стрімерах, без тек�
   assert.deepEqual(c!.byStreamer.map((s) => s.handle).sort(), ['gma', 'gmb']);
   assert.ok(c!.recent.every((r) => !('message' in r)));
 });
+
+test('/ukraine: «збір у фокусі» рахує реальні донати, без стартової суми (seed туди не йде)', async () => {
+  const col = await testDb.collection.create({ data: { userId: A, name: 'СтартЗбір', status: 'active', goalUah: 1000, seedUah: 500 } });
+  await testDb.appSetting.upsert({ where: { id: 'app' }, update: { featuredCollectionId: col.id }, create: { id: 'app', featuredCollectionId: col.id } });
+  await testDb.donation.create({ data: { userId: A, externalId: 'gm-seed', donorName: 'Реал Дон', amount: 100, message: 'Київ', settlementId: kyiv, status: 'recognized', collectionId: col.id, createdAt: new Date(base) } });
+  const d = await getGlobalMap(testDb, { maxAgeMs: 0 });
+  assert.equal(d.featured?.name, 'СтартЗбір');
+  assert.equal(d.featured?.raisedUah, 100, 'реальні донати — стартова сума на /ukraine не враховується');
+  assert.equal(d.featured?.displayedUah, 600, 'displayed існує (seed+реал), але сторінка /ukraine читає raisedUah');
+});

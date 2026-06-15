@@ -57,6 +57,7 @@ export default async function FeedOverlay({ searchParams }: { searchParams: SP }
                   <div className="l-meta">
                     {d.city ? <b>{d.city}</b> : 'місто не вказане'}
                     {d.newCity && <span className="l-ncty">🆕 нове місто</span>}
+                    {d.abroad && <span className="l-acty">🌍 закордон</span>}
                     {d.city && d.points > 0
                       ? ` · +${formatPoints(d.points)} ${pluralBaliv(d.points)}`
                       : d.city
@@ -81,6 +82,7 @@ export default async function FeedOverlay({ searchParams }: { searchParams: SP }
                   points: recent[0].points,
                   message: cfg.comment ? oneLineComment(recent[0].message) : '',
                   newCity: recent[0].newCity,
+                  abroad: recent[0].abroad,
                 }
               : null
           }

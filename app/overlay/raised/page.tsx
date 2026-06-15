@@ -18,6 +18,8 @@ export default async function RaisedOverlay({ searchParams }: { searchParams: SP
   const cfg = parseOverlayConfig(sp, { period: 'stream' });
 
   let where: { userId: string; streamId?: string; collectionId?: string; createdAt?: { gte?: Date; lt?: Date } };
+  // seedUah ≠ 0 лише для періоду «за збір»: стартова сума додається до показу бара, не до інших періодів.
+  let seedUah = 0;
   // Фактичний період показу: коли стріму/збору нема, скоуп падає на «весь час» — і підпис теж,
   // щоб не показувати суму за весь час під написом «за стрім»/«за збір».
   let effective = cfg.period;
@@ -31,14 +33,14 @@ export default async function RaisedOverlay({ searchParams }: { searchParams: SP
     else { where = { userId: U }; effective = 'all'; }
   } else if (cfg.period === 'collection') {
     const col = await getActiveCollection(prisma, U);
-    if (col) where = { userId: U, collectionId: col.id };
+    if (col) { where = { userId: U, collectionId: col.id }; seedUah = col.seedUah.toNumber(); }
     else { where = { userId: U }; effective = 'all'; }
   } else {
     const ca = createdAtWhere(windowFor(cfg.period as Range));
     where = { userId: U, ...(ca ? { createdAt: ca } : {}) };
   }
   const agg = await prisma.donation.aggregate({ where, _sum: { amount: true } });
-  const sum = agg._sum.amount?.toNumber() ?? 0;
+  const sum = (agg._sum.amount?.toNumber() ?? 0) + seedUah;
 
   return (
     <OverlayShell config={cfg} channelKey={key}>

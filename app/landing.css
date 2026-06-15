@@ -122,6 +122,7 @@ body:has(.landing) { height: auto; overflow: auto; }
 .landing .city-sub { font-size: 12px; color: var(--ink-3); }
 .landing .pts { font-family: "Manrope"; font-weight: 800; font-size: 16px; color: var(--accent-soft); font-variant-numeric: tabular-nums; }
 .landing .pts small { font-weight: 500; font-size: 11px; color: var(--ink-3); display: block; text-align: right; }
+.landing .top-row-empty { display: block; text-align: center; color: var(--ink-3); font-size: 14px; padding: 16px 12px; }
 
 /* mini map */
 .landing .mini-map {
@@ -219,6 +220,21 @@ body:has(.landing) { height: auto; overflow: auto; }
 .landing .foot-made a:hover { color: var(--accent); }
 
 /* ===== Банер глобальної мапи /ukraine ===== */
+/* ---------- Raised band (соц-доказ під hero) ---------- */
+.landing .raised-band-sec { padding: 8px 0 4px; }
+.landing .raised-band {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  padding: 18px 24px; border-radius: var(--radius);
+  background: var(--card); border: 1px solid var(--line-soft);
+  text-align: center;
+}
+.landing .raised-emoji { font-size: 22px; flex: none; }
+.landing .raised-text { font-size: 17px; color: var(--ink-2); }
+.landing .raised-text b {
+  font-family: "Manrope"; font-weight: 800; color: var(--accent-soft);
+  font-variant-numeric: tabular-nums; font-size: 20px;
+}
+
 .landing .ukr-banner-sec { padding: 8px 0 4px; }
 .landing .ukr-banner {
   display: flex; align-items: center; gap: 18px; padding: 18px 24px;

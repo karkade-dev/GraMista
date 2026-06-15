@@ -36,7 +36,7 @@ export default async function MapOverlay({ searchParams }: { searchParams: SP })
   return (
     <OverlayShell config={cfg} channelKey={key}>
       <div className="ov-map-canvas">
-        <MapUkraine points={state.map} showControls={false} initialLabels="all" initialView="points" />
+        <MapUkraine points={state.map} showControls={false} initialLabels="all" initialView="points" world={state.abroadWorldMap} />
       </div>
     </OverlayShell>
   );

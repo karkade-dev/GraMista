@@ -45,7 +45,7 @@ export default async function PublicPage({ params }: { params: Promise<{ handle:
   if (!v.ok) notFound();
   const data = await loadPage(v.handle);
   if (!data) notFound();
-  const { profile, state, fullLeaderboard, totalAllTimeUah, battle, tiles, activeCollection, pastCollections, streams } = data;
+  const { profile, state, fullLeaderboard, fullAbroad, totalAllTimeUah, battle, tiles, activeCollection, pastCollections, streams } = data;
 
   const jar = profile.monobankJarUrl;
   const qrSvg = jar
@@ -61,7 +61,7 @@ export default async function PublicPage({ params }: { params: Promise<{ handle:
         scopeKey={activeCollection?.id ?? ''}
       />
       <div className="pub-map">
-        <PublicMap points={state.map} />
+        <PublicMap points={state.map} world={state.abroadWorldMap} />
       </div>
 
       <header className="pub-panel pub-hdr">
@@ -120,7 +120,7 @@ export default async function PublicPage({ params }: { params: Promise<{ handle:
         <div className="pub-ptitle">
           Топ міст <span>{fullLeaderboard.length} міст</span>
         </div>
-        <TopCities rows={fullLeaderboard} />
+        <TopCities rows={fullLeaderboard} abroadRows={fullAbroad} />
         <CitySeek handle={profile.handle} />
         <RaceModal handle={profile.handle} />
       </section>
@@ -148,12 +148,12 @@ export default async function PublicPage({ params }: { params: Promise<{ handle:
       <section className="pub-panel pub-foot" aria-label="Донат">
         {activeCollection && activeCollection.goalUah != null && (
           <div className="pub-goal">
-            <GoalCelebration percent={activeCollection.percent} />
+            <GoalCelebration percent={activeCollection.displayedPercent} />
             <div className="pub-goal-top">
-              <span>{activeCollection.percent >= 100 ? `🎉 ${activeCollection.name} — ЗАКРИТО!` : activeCollection.name}</span>
-              <b>{formatUah(activeCollection.raisedUah)} / {formatUah(activeCollection.goalUah)}</b>
+              <span>{activeCollection.displayedPercent >= 100 ? `🎉 ${activeCollection.name} — ЗАКРИТО!` : activeCollection.name}</span>
+              <b>{formatUah(activeCollection.displayedUah)} / {formatUah(activeCollection.goalUah)}</b>
             </div>
-            <div className="pub-bar"><i style={{ width: `${activeCollection.percent}%` }} /></div>
+            <div className="pub-bar"><i style={{ width: `${activeCollection.displayedPercent}%` }} /></div>
           </div>
         )}
         <div className="pub-raised">

@@ -31,6 +31,7 @@ export function FeedList({ rows, biggestId, showComments }: { rows: RecentItem[]
           <span className="who">{r.who}</span>
           {r.city && <span className="cty">{r.city}</span>}
           {r.newCity && <span className="ncty">🆕 нове місто</span>}
+          {r.abroad && <span className="acty">🌍 закордон</span>}
           <span className="amt">+{formatUah(r.amountUah)}</span>
           {showComments && r.message && <div className="fmsg">{oneLineComment(r.message)}</div>}
         </div>

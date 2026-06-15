@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db';
 import { requireUserId } from '@/lib/session';
-import { encodeDonationNotify, REFRESH_EVENT_ID } from '@/lib/notify';
+import { notifyRefresh } from '@/lib/notify';
 import {
   createCollection,
   updateCollection,
@@ -17,31 +17,31 @@ import {
 } from '@/lib/collections';
 
 // Тонкі Server Actions для вкладки «Збори»: Zod-валідація → lib/collections → ревалідація.
+// Будимо SSE-слухачів стрімера (оверлеї/публічна/док) спільним notifyRefresh — перемкнувся збір.
 
 const emptyToUndef = (v: unknown) => (v === '' || v == null ? undefined : v);
 const optDate = z.preprocess(emptyToUndef, z.coerce.date().optional());
-
-/** Будимо SSE-слухачів стрімера (оверлеї/публічна) службовою подією — перемкнувся активний збір. */
-async function notifyRefresh(userId: string): Promise<void> {
-  await prisma.$executeRaw`SELECT pg_notify('donation', ${encodeDonationNotify(userId, REFRESH_EVENT_ID)})`;
-}
+// Стартова сума («Вже зібрано»): порожнє поле = 0 (нема стартової суми).
+const seedField = z.preprocess((v) => (v === '' || v == null ? 0 : v), z.coerce.number().min(0).max(1_000_000_000));
 
 const CreateInput = z.object({
   name: z.string().trim().min(1, 'Потрібна назва').max(120),
   // Ціль необов'язкова — порожнє поле = збір-змагання без грошової цілі.
   goalUah: z.preprocess(emptyToUndef, z.coerce.number().positive().max(1_000_000_000).optional()),
+  seedUah: seedField,
   endAt: optDate,
 });
 
 /** Створити збір (на паузі — активують окремою кнопкою). */
 export async function createCollectionAction(formData: FormData): Promise<void> {
   const U = await requireUserId();
-  const { name, goalUah, endAt } = CreateInput.parse({
+  const { name, goalUah, endAt, seedUah } = CreateInput.parse({
     name: formData.get('name'),
     goalUah: formData.get('goalUah'),
+    seedUah: formData.get('seedUah'),
     endAt: formData.get('endAt'),
   });
-  await createCollection(prisma, U, { name, goalUah: goalUah ?? null, ...(endAt ? { endAt } : {}) });
+  await createCollection(prisma, U, { name, goalUah: goalUah ?? null, seedUah, ...(endAt ? { endAt } : {}) });
   revalidatePath('/collections');
   revalidatePath('/', 'layout'); // плашка прогресу збору в спільній шапці
 }
@@ -50,21 +50,24 @@ const UpdateInput = z.object({
   id: z.string().min(1),
   name: z.preprocess(emptyToUndef, z.string().trim().max(120).optional()),
   goalUah: z.preprocess(emptyToUndef, z.coerce.number().positive().max(1_000_000_000).optional()),
+  seedUah: seedField,
   endAt: optDate,
 });
 
-/** Редагувати збір: назва / ціль / дата кінця. Порожнє поле цілі = прибрати ціль. */
+/** Редагувати збір: назва / ціль / стартова сума / дата кінця. Порожнє поле цілі = прибрати ціль. */
 export async function updateCollectionAction(formData: FormData): Promise<void> {
   const U = await requireUserId();
-  const { id, name, goalUah, endAt } = UpdateInput.parse({
+  const { id, name, goalUah, endAt, seedUah } = UpdateInput.parse({
     id: formData.get('id'),
     name: formData.get('name'),
     goalUah: formData.get('goalUah'),
+    seedUah: formData.get('seedUah'),
     endAt: formData.get('endAt'),
   });
   await updateCollection(prisma, U, id, {
     ...(name != null ? { name } : {}),
     goalUah: goalUah ?? null,
+    seedUah,
     ...(endAt != null ? { endAt } : {}),
   });
   revalidatePath('/collections');
@@ -85,7 +88,7 @@ export async function setCollectionStatusAction(formData: FormData): Promise<voi
   else await completeCollection(prisma, U, id);
   revalidatePath('/collections');
   revalidatePath('/', 'layout'); // зміна активного збору змінює плашку в шапці
-  await notifyRefresh(U); // оверлеї/публічна перемикаються без F5
+  await notifyRefresh(prisma, U); // оверлеї/публічна перемикаються без F5
 }
 
 const MoveInput = z.object({
@@ -103,7 +106,8 @@ export async function moveDonationToCollectionAction(formData: FormData): Promis
   await moveDonationToCollection(prisma, U, externalId, collectionId);
   revalidatePath('/dashboard');
   revalidatePath('/collections');
-  await notifyRefresh(U); // оверлеї/публічна оновлюють топ/суму без F5
+  revalidatePath('/dock'); // дію можна викликати з доку — інакше сам док не оновиться після перенесення
+  await notifyRefresh(prisma, U); // оверлеї/публічна оновлюють топ/суму без F5
 }
 
 const DeleteInput = z.object({ id: z.string().min(1) });

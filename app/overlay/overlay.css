@@ -19,13 +19,14 @@ html, body { background: transparent !important; margin: 0; }
 .ov { border-radius: var(--radius); color: var(--ink); }
 .ov, .ov * { box-sizing: border-box; }
 
-/* A: «Скло» (затверджений) */
+/* A: «Скло» — напівпрозора темна підкладка В МЕЖАХ панелі (дає контраст для тексту) + рамка.
+   Заливка обрізана рамкою-радіусом, тож на сцену OBS НЕ виходить (на відміну від тіні).
+   Прибрано: drop-shadow (лягав плямою на гру) і backdrop-filter (у прозорому Browser
+   Source він гру позаду не бачить — блюру однаково не давав). */
 .st-glass .ov {
   background: rgba(27, 23, 20, .56);
   border: 1px solid rgba(243, 233, 223, .10);
-  backdrop-filter: blur(13px) saturate(115%);
-  -webkit-backdrop-filter: blur(13px) saturate(115%);
-  box-shadow: 0 14px 40px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
 }
 .st-glass .ov, .st-glass .ov * { text-shadow: 0 1px 3px rgba(0, 0, 0, .55); }
 
@@ -33,7 +34,6 @@ html, body { background: transparent !important; margin: 0; }
 .st-solid .ov {
   background: linear-gradient(180deg, rgba(31, 25, 21, .94), rgba(24, 19, 16, .96));
   border: 1px solid var(--line);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, .55);
 }
 .st-solid .ov, .st-solid .ov * { text-shadow: none; }
 
@@ -89,8 +89,9 @@ html, body { background: transparent !important; margin: 0; }
 
 /* ───── Донат-алерт (картка) ───── */
 .ov-alert { position: relative; width: 380px; padding: 14px 16px; display: flex; align-items: center; gap: 14px; }
-.st-glass .ov-alert { border-color: rgba(226, 168, 120, .28); box-shadow: 0 16px 44px rgba(0, 0, 0, .55), 0 0 0 1px rgba(226, 168, 120, .12), 0 0 28px rgba(208, 135, 90, .22); }
-.ov-alert.show { animation: ov-pop 5.2s ease forwards; }
+/* Алерт лишає лише теплий акцентний обідок+сяйво (це «святковий» pop донату), без темної тіні. */
+.st-glass .ov-alert { border-color: rgba(226, 168, 120, .28); box-shadow: 0 0 0 1px rgba(226, 168, 120, .12), 0 0 28px rgba(208, 135, 90, .22); }
+.ov-alert.show { animation: ov-pop 8s ease forwards; }
 .ov-alert .ov-ncty {
   position: absolute; top: -11px; left: 14px; font-weight: 800; font-size: 11px; color: #241E19;
   background: linear-gradient(180deg, #E0B66B, #D0875A); border-radius: 999px; padding: 3px 10px;
@@ -113,6 +114,7 @@ html, body { background: transparent !important; margin: 0; }
 .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 700; padding: 3px 11px; border-radius: 999px; color: var(--accent-soft); background: rgba(208, 135, 90, .16); border: 1px solid rgba(226, 168, 120, .22); text-shadow: none !important; }
 .badge.pot { color: var(--pot); background: rgba(140, 154, 107, .16); border-color: rgba(140, 154, 107, .3); }
 .badge.none { color: var(--ink-3); background: rgba(154, 137, 121, .14); border-color: rgba(154, 137, 121, .25); }
+.badge.abroad { color: #7FE0C2; background: rgba(93, 202, 165, .13); border-color: rgba(93, 202, 165, .28); }
 
 /* ───── Стрічка (список) ───── */
 .ov-list { width: 340px; padding: 12px 12px; display: flex; flex-direction: column; gap: 8px; }
@@ -132,6 +134,10 @@ html, body { background: transparent !important; margin: 0; }
 .ov-list .l-ncty {
   margin-left: 6px; font-weight: 800; font-size: 10px; color: #241E19;
   background: linear-gradient(180deg, var(--gold, #E0B66B), #D0875A); border-radius: 999px; padding: 1px 7px;
+}
+.ov-list .l-acty {
+  margin-left: 6px; font-weight: 800; font-size: 10px; color: #7FE0C2;
+  background: rgba(93, 202, 165, .13); border-radius: 999px; padding: 1px 7px;
 }
 
 /* ───── Прогрес збору ───── */

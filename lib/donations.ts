@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { anonymize } from './anonymize';
 import { formatDateTime } from './format';
 import { windowFor, createdAtWhere, type Range } from './period';
+import { cityOpeners, openerKey } from './newCity';
 
 // Повна історія донатів (§17.2): keyset-пагінація (30/стор., без штучного ліміту),
 // пошук за донатером, фільтр діапазону суми, статус; експорт у CSV.
@@ -40,6 +41,8 @@ export interface DonationFilter {
   streamId?: string;
   /** Період (тиждень/місяць/весь час) — фільтр за createdAt. */
   range?: Range;
+  /** Нижня межа createdAt (включно) — для періоду «сьогодні» доку. Має пріоритет над range. */
+  since?: Date;
 }
 
 /** Поле сортування: дата (createdAt) або сума (amount). */
@@ -88,7 +91,9 @@ function buildWhere(userId: string, f: DonationFilter): Prisma.DonationWhereInpu
   }
   if (f.settlementId) where.settlementId = f.settlementId;
   if (f.streamId) where.streamId = f.streamId;
-  if (f.range && f.range !== 'all') {
+  if (f.since) {
+    where.createdAt = { gte: f.since };
+  } else if (f.range && f.range !== 'all') {
     const w = createdAtWhere(windowFor(f.range));
     if (w) where.createdAt = w;
   }
@@ -208,6 +213,88 @@ export async function listAllDonations(
     include: { settlement: { select: { name: true } } },
   });
   return records.map(toRow);
+}
+
+// — Донат-док (/dock): сирий шлях (повне ім'я + сирий коментар), offset-пагінація. —
+// Це ВНУТРІШНІЙ операторський перегляд за приватним dockKey — на відміну від listDonations
+// (анонімізує ім'я) і getState (анонімізує+цензурить). PII лише тут, за приватною силкою.
+
+export const DOCK_PER_PAGE_DEFAULT = 20;
+
+export interface DockDonationRow {
+  externalId: string;
+  /** ПОВНЕ ім'я (внутрішньо, за приватним ключем) — не анонімізоване. */
+  who: string;
+  amountUah: number;
+  /** Сирий коментар (не цензурований) — як адмінська історія. */
+  message: string;
+  city: string | null;
+  status: DonationStatus;
+  points: number;
+  at: number;
+  /** Збір, до якого прив'язаний донат (для інлайн-перенесення в доку); null — поза збором. */
+  collectionId: string | null;
+  /** Донат відкрив місто (перший PointEvent у його зборі) — бейдж 🆕. */
+  newCity: boolean;
+}
+
+export interface DockDonationPage {
+  rows: DockDonationRow[];
+  total: number;
+  page: number;
+  perPage: number;
+  pageCount: number;
+}
+
+/**
+ * Сторінка журналу донатів для доку: offset-пагінація (нумеровані сторінки), найновіші зверху,
+ * ПОВНЕ ім'я + сирий коментар. Реюзає buildWhere (фільтр) і cityOpeners (🆕). page клемпиться
+ * до [1..pageCount]. 🆕 рахується лише для рядків поточної сторінки (дешево).
+ */
+export async function listDonationsForDock(
+  db: PrismaClient,
+  userId: string,
+  filter: DonationFilter = {},
+  opts: { page?: number; perPage?: number } = {},
+): Promise<DockDonationPage> {
+  const perPage = opts.perPage ?? DOCK_PER_PAGE_DEFAULT;
+  const where = buildWhere(userId, filter);
+  const total = await db.donation.count({ where });
+  const pageCount = Math.max(1, Math.ceil(total / perPage));
+  const page = Math.min(Math.max(1, opts.page ?? 1), pageCount);
+
+  const records = await db.donation.findMany({
+    where,
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    skip: (page - 1) * perPage,
+    take: perPage,
+    select: {
+      id: true, externalId: true, donorName: true, amount: true, message: true,
+      status: true, pointsAwarded: true, createdAt: true,
+      settlementId: true, collectionId: true,
+      settlement: { select: { name: true } },
+    },
+  });
+
+  const pairs = records
+    .filter((r) => r.settlementId)
+    .map((r) => ({ settlementId: r.settlementId as string, collectionId: r.collectionId }));
+  const openers = await cityOpeners(db, userId, pairs);
+
+  const rows: DockDonationRow[] = records.map((d) => ({
+    externalId: d.externalId,
+    who: d.donorName || '(без імені)',
+    amountUah: d.amount.toNumber(),
+    message: d.message,
+    city: d.settlement?.name ?? null,
+    status: d.status,
+    points: d.pointsAwarded.toNumber(),
+    at: d.createdAt.getTime(),
+    collectionId: d.collectionId,
+    newCity: d.settlementId ? openers.get(openerKey(d.settlementId, d.collectionId)) === d.id : false,
+  }));
+
+  return { rows, total, page, perPage, pageCount };
 }
 
 // — CSV —

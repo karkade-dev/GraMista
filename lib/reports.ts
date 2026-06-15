@@ -38,13 +38,13 @@ export function streamReportImage(s: StreamSummary): ReportImageData {
 
 /** Підсумок збору → дані картинки-звіту (відсоток — фактичний, може >100). Ціль необов'язкова. */
 export function collectionReportImage(c: CollectionRow): ReportImageData {
-  const pct = c.goalUah && c.goalUah > 0 ? Math.round((c.raisedUah / c.goalUah) * 100) : 0;
+  const pct = c.goalUah && c.goalUah > 0 ? Math.round((c.displayedUah / c.goalUah) * 100) : 0;
   return {
     kicker: 'Звіт збору',
     title: c.name,
     subtitle: c.goalUah != null ? `Ціль ${formatUah(c.goalUah)}` : 'Збір-змагання',
     stats: [
-      { label: 'Зібрано', value: formatUah(c.raisedUah) },
+      { label: 'Зібрано', value: formatUah(c.displayedUah) },
       // Без цілі відсоток не має сенсу — показуємо к-сть міст у грі.
       c.goalUah != null
         ? { label: 'Виконано', value: `${pct}%` }
