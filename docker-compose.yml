@@ -26,6 +26,8 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
+      # Час рендериться на сервері — без TZ контейнер показує UTC замість київського.
+      TZ: ${TZ:-Europe/Kyiv}
       # Усередині мережі compose БД доступна як host `db`, порт 5432 (не 5435).
       DATABASE_URL: "postgresql://gramista:gramista@db:5432/gramista?schema=public"
       BETTER_AUTH_URL: "http://localhost:3002"

@@ -8,6 +8,7 @@ import { LiveRefresh } from '@/app/LiveRefresh';
 import { NewCityWatcher } from '@/app/NewCityWatcher';
 import { HeaderStats } from '@/app/HeaderStats';
 import { TabNav } from '@/app/TabNav';
+import { Hint } from '@/app/Hint';
 import { isServiceAdmin } from '@/lib/serviceAdmin';
 import { startStreamAction, stopStreamAction, setCityBattleAction } from '@/app/actions';
 
@@ -100,16 +101,24 @@ export default async function PanelLayout({ children }: { children: ReactNode })
             <span className="ta-btn">⚙ Керування ▾</span>
           </summary>
           <div className="ta-inner">
-            <form action={setCityBattleAction}>
-              <input type="hidden" name="on" value={header.cityBattle ? 'false' : 'true'} />
-              <button
-                type="submit"
-                className={`btn-toggle${header.cityBattle ? ' on' : ''}`}
-                title="Перемкнути нарахування балів містам (гроші рахуються завжди)"
-              >
-                ⚔️ Битва міст: <b>{header.cityBattle ? 'увімк' : 'вимк'}</b>
-              </button>
-            </form>
+            <span className="toggle-row">
+              <form action={setCityBattleAction}>
+                <input type="hidden" name="on" value={header.cityBattle ? 'false' : 'true'} />
+                <button
+                  type="submit"
+                  className={`btn-toggle${header.cityBattle ? ' on' : ''}`}
+                  title="Перемкнути участь донатів у грі (гроші збираються завжди)"
+                >
+                  ⚔️ Битва міст: <b>{header.cityBattle ? 'увімк' : 'вимк'}</b>
+                </button>
+              </form>
+              <Hint>
+                {'Битва міст — це гра в міста: глядачі донатять і пишуть місто, місто збирає бали, є топ і мапа. ' +
+                  'Увімк — нові донати дають містам бали (топ і мапа працюють). ' +
+                  'Вимк — нові донати приймаються як звичайно, але в гру не йдуть: без балів, і глядачі їх не бачать. Видно лише тобі. ' +
+                  'Окремий донат можна вручну вивести з гри або повернути — кнопкою на самому донаті.'}
+              </Hint>
+            </span>
 
             {active ? (
               <>

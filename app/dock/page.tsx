@@ -8,8 +8,10 @@ import { LiveRefresh } from '@/app/LiveRefresh';
 import { DockLive } from '@/app/DockLive';
 import { DockZoom } from '@/app/DockZoom';
 import { ReassignCityCell } from '@/app/ReassignCityCell';
+import { DonationGameToggle } from '@/app/DonationGameToggle';
 import { CityAutocomplete } from '@/app/CityAutocomplete';
-import { assignCityAction, reassignCityAction } from '@/app/(panel)/admin/actions';
+import { TeachableComment } from '@/app/TeachableComment';
+import { assignCityAction, reassignCityAction, rememberSpellingAction, setDonationGameAction } from '@/app/(panel)/admin/actions';
 import { moveDonationToCollectionAction } from '@/app/(panel)/collections/actions';
 
 export const dynamic = 'force-dynamic';
@@ -83,7 +85,7 @@ export default async function DockPage({ searchParams }: { searchParams: SP }) {
     <div className="dock-root">
       {/* Auto-refresh лише на 1-й сторінці — на ≥2 список стабільний, живе тільки лічильник DockLive. */}
       {cfg.live && data.page === 1 && <LiveRefresh dockKey={cfg.key} />}
-      {cfg.live && <DockLive page={data.page} topId={data.rows[0]?.externalId ?? null} firstPageHref={firstPageHref} />}
+      {cfg.live && <DockLive page={data.page} topId={data.rows[0]?.externalId ?? null} rowIds={data.rows.map((r) => r.externalId)} firstPageHref={firstPageHref} />}
       <div className="dk">
         <div className="dk-bar">
           <span className="live"><span className="dot" /> Донати наживо</span>
@@ -108,7 +110,17 @@ export default async function DockPage({ searchParams }: { searchParams: SP }) {
                     <span className="time">{hhmm(d.at)}</span>
                     {d.newCity && <span className="ncty">🆕 нове</span>}
                   </div>
-                  {d.message && <div className="msg">«{d.message}»</div>}
+                  {d.message && (
+                    <div className="msg">
+                      <TeachableComment
+                        comment={d.message}
+                        settlementId={d.settlementId}
+                        city={d.city}
+                        action={rememberSpellingAction}
+                        quote
+                      />
+                    </div>
+                  )}
                   {/* Інлайн призначення/зміна міста — ті самі компоненти й дії, що на дашборді/в історії. */}
                   <div className="dk-assign">
                     {d.city ? (
@@ -123,7 +135,15 @@ export default async function DockPage({ searchParams }: { searchParams: SP }) {
                         />
                       </div>
                     )}
-                    {d.city && d.points > 0 ? (
+                    <DonationGameToggle
+                      externalId={d.externalId}
+                      outOfGame={d.outOfGame}
+                      hasCity={Boolean(d.city)}
+                      action={setDonationGameAction}
+                    />
+                    {d.outOfGame ? (
+                      <span className="badge none">поза грою</span>
+                    ) : d.city && d.points > 0 ? (
                       <span className="badge add">＋ {formatPoints(d.points)} {pluralBaliv(d.points)} місту</span>
                     ) : d.city ? (
                       <span className="badge pot">🫙 у скарбничку</span>

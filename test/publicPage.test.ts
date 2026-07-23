@@ -43,7 +43,7 @@ test('getPublicPage: порожній акаунт — безпечні нулі
   // Контракт публічності: рівно ці ключі, нічого зайвого (email/overlayKey/webhookSecret/monoAccountId сюди не течуть).
   assert.deepEqual(
     Object.keys(d.profile).sort(),
-    ['handle', 'monobankJarUrl', 'name', 'publicShowStreams', 'showCommentPublic', 'twitchUrl', 'youtubeUrl'],
+    ['handle', 'monobankJarUrl', 'name', 'publicShowStreams', 'showCommentPublic', 'telegramUrl', 'twitchUrl', 'youtubeUrl'],
   );
   assert.equal(d.profile.name, 'Публічний Тест');
   assert.deepEqual(d.fullLeaderboard, []);

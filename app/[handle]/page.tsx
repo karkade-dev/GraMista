@@ -86,6 +86,9 @@ export default async function PublicPage({ params }: { params: Promise<{ handle:
           {profile.youtubeUrl && (
             <a className="pub-hbtn" href={profile.youtubeUrl} target="_blank" rel="noreferrer">▶ YouTube</a>
           )}
+          {profile.telegramUrl && (
+            <a className="pub-hbtn" href={profile.telegramUrl} target="_blank" rel="noreferrer">✈️ Telegram</a>
+          )}
           {streams.filter((s) => s.endedAt).length > 0 && (
             <StreamsPanel
               rows={streams
@@ -105,6 +108,7 @@ export default async function PublicPage({ params }: { params: Promise<{ handle:
             />
           )}
           <ShareButton title={`${profile.name} — битва міст на GraMista`} />
+          <a className="pub-hbtn" href="/" aria-label="GraMista — на головну">🗺 GraMista</a>
         </div>
       </header>
 

@@ -22,8 +22,11 @@ export async function processDonation(
     select: { cityBattle: true, abroadCities: true, abroadHideAggressor: true },
   });
   const settlementId =
-    (await resolveCity(db, d.message, { abroad: user?.abroadCities ?? false, hideAggressor: user?.abroadHideAggressor ?? false }))
-      ?.settlementId ?? null;
+    (await resolveCity(db, d.message, {
+      abroad: user?.abroadCities ?? false,
+      hideAggressor: user?.abroadHideAggressor ?? false,
+      userId, // приватні синоніми цього стрімера + спільні (мультитенант)
+    }))?.settlementId ?? null;
   const awardPoints = user?.cityBattle ?? true;
   const active = await db.stream.findFirst({
     where: { userId, endedAt: null },

@@ -36,13 +36,13 @@ export default async function UkrainePage() {
         <GlobalMapView points={data.litCities} />
       </div>
 
-      <header className="ukr-panel ukr-hdr">
+      <a className="ukr-panel ukr-hdr" href="/" aria-label="GraMista — на головну">
         <div className="ukr-brand-mark">🗺️</div>
         <div>
           <div className="ukr-brand-name">Gra<span>Mista</span></div>
           <div className="ukr-brand-sub">жива мапа донатів України</div>
         </div>
-      </header>
+      </a>
 
       <section className="ukr-panel ukr-hero" aria-label="Разом зібрано">
         <div className="lbl">Разом зібрано</div>

@@ -29,6 +29,9 @@ services:
     container_name: gramista-prod-web
     restart: unless-stopped
     environment:
+      # Час рендериться на сервері (стрічки донатів, док, межа «сьогодні») — без TZ
+      # контейнер живе в UTC і показує київський час зі зсувом.
+      TZ: ${TZ:-Europe/Kyiv}
       DATABASE_URL: "postgresql://gramista:${POSTGRES_PASSWORD}@db:5432/gramista?schema=public"
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       BETTER_AUTH_URL: ${APP_BASE_URL}

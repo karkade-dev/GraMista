@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import { leaderboard, type LeaderRow } from './leaderboard';
 import { streamSummary, type StreamSummary } from './streams';
 import { collectionSummary, getActiveCollection } from './collections';
@@ -14,6 +14,8 @@ export interface RecentItem {
   amountUah: number;
   message: string;
   city: string | null;
+  /** id розпізнаного міста (для навчання синоніму кліком по коментарю); null — нерозпізнано. */
+  settlementId: string | null;
   points: number;
   at: number;
   /** Збір, до якого зарахований донат (null — поза збором) — для дії «зарахувати в збір». */
@@ -22,6 +24,8 @@ export interface RecentItem {
   newCity: boolean;
   /** Закордонне місто (country !== 'UA') — для мітки 🌍 у стрічці. */
   abroad: boolean;
+  /** Донат поза грою (балів не дає, схований від глядачів) — мітка лише в операторському перегляді. */
+  outOfGame: boolean;
 }
 
 /**
@@ -45,7 +49,7 @@ function isBigger(a: RecentItem, b: RecentItem): boolean {
 
 export interface DashboardState {
   activeStream: StreamSummary | null;
-  /** «Гаманець» — сума ВСІХ донатів (з містом і без). Гроші рахуються завжди. */
+  /** Сума донатів у грі (з містом і без); поза грою — не в статистиці, лише в списках /donations і /dock. */
   totalRaisedUah: number;
   /** Глобальний тумблер «битва міст»: коли false — нові донати лише гроші, без балів. */
   cityBattle: boolean;
@@ -63,11 +67,11 @@ export interface DashboardState {
 export interface HeaderState {
   /** Активний стрім (назва + час старту + поточна тривалість) — для статусу й таймера. */
   activeStream: { name: string; startedAt: Date; durationMs: number } | null;
-  /** Сума ВСІХ донатів за весь час (гаманець стрімера). */
+  /** Сума донатів У ГРІ за весь час (поза грою в статистику не входить). */
   totalRaisedUah: number;
   /** Тумблер «битва міст». */
   cityBattle: boolean;
-  /** Кількість донатів за весь час. */
+  /** Кількість донатів у грі за весь час. */
   donationCount: number;
   /** Прогрес активного збору (найновішого зі status='active') — для плашки в шапці; null, якщо нема. goalUah null — збір без цілі. raisedUah/percent тут показові (з урахуванням стартової суми). */
   activeCollection: { name: string; raisedUah: number; goalUah: number | null; percent: number } | null;
@@ -109,23 +113,23 @@ export interface CityDetail {
   points: number;
   donations: number;
   raisedUah: number;
-  /** Останні донати міста (анонімно). */
+  /** Донати міста (анонімно), найновіші спершу. За замовч. 10; з allRecent — усі. */
   recent: { who: string; amountUah: number; at: number; points: number }[];
-  /** Топ-донатери міста за сумою (анонімно). */
-  topDonors: { who: string; totalUah: number }[];
+  /** Топ-донатери міста за сумою (анонімно); count — скільки донатів цього донатера в місті. */
+  topDonors: { who: string; totalUah: number; count: number }[];
 }
 
 /**
  * Деталі одного міста (§17.1/§17.4: клік на місто → деталі): бали, к-сть/сума донатів,
  * останні донати й топ-донатери (ім'я анонімізоване назовні). window — опційний період.
- * null, якщо міста нема в довіднику.
+ * scope.allRecent — повна історія донатів міста замість останніх 10. null, якщо міста нема в довіднику.
  */
 export async function cityDetail(
   db: PrismaClient,
   userId: string,
   settlementId: string,
   window: PeriodWindow = {},
-  scope: { collectionId?: string } = {},
+  scope: { collectionId?: string; allRecent?: boolean } = {},
 ): Promise<CityDetail | null> {
   const s = await db.settlement.findUnique({
     where: { id: settlementId },
@@ -135,15 +139,16 @@ export async function cityDetail(
 
   const createdAt = createdAtWhere(window);
   const colScope = scope.collectionId ? { collectionId: scope.collectionId } : {};
-  const donWhere = { userId, settlementId, ...colScope, ...(createdAt ? { createdAt } : {}) };
+  const donWhere = { userId, settlementId, outOfGame: false, ...colScope, ...(createdAt ? { createdAt } : {}) };
   const [agg, ptsAgg, recentRows, donorGroups] = await Promise.all([
     db.donation.aggregate({ where: donWhere, _sum: { amount: true }, _count: true }),
     db.pointEvent.aggregate({ where: { userId, settlementId, ...colScope, ...(createdAt ? { createdAt } : {}) }, _sum: { points: true } }),
-    db.donation.findMany({ where: donWhere, orderBy: { createdAt: 'desc' }, take: 10 }),
+    db.donation.findMany({ where: donWhere, orderBy: { createdAt: 'desc' }, ...(scope.allRecent ? {} : { take: 10 }) }),
     db.donation.groupBy({
       by: ['donorName'],
       where: donWhere,
       _sum: { amount: true },
+      _count: true,
       orderBy: { _sum: { amount: 'desc' } },
       take: 5,
     }),
@@ -165,6 +170,7 @@ export async function cityDetail(
     topDonors: donorGroups.map((g) => ({
       who: anonymize(g.donorName) || '(без імені)',
       totalUah: g._sum.amount?.toNumber() ?? 0,
+      count: g._count,
     })),
   };
 }
@@ -186,12 +192,12 @@ export async function dashboardTiles(
     getActiveCollection(db, userId),
   ]);
   const [today, leaderRows, mapPts, streamAgg] = await Promise.all([
-    db.donation.aggregate({ where: { userId, createdAt: { gte: startOfDay } }, _sum: { amount: true } }),
+    db.donation.aggregate({ where: { userId, createdAt: { gte: startOfDay }, outOfGame: false }, _sum: { amount: true } }),
     leaderboard(db, userId, { from: startOfDay, limit: 1 }),
     // «Активних міст» — у рамці поточного змагання (активний збір); нема збору → за весь час.
     mapPoints(db, userId, {}, activeCol ? { collectionId: activeCol.id } : {}),
     open
-      ? db.donation.aggregate({ where: { userId, streamId: open.id }, _sum: { amount: true }, _count: true })
+      ? db.donation.aggregate({ where: { userId, streamId: open.id, outOfGame: false }, _sum: { amount: true }, _count: true })
       : Promise.resolve(null),
   ]);
 
@@ -203,13 +209,13 @@ export async function dashboardTiles(
   };
 }
 
-/** Сума + к-сть донатів за фільтром (для periodTotals у шапці). */
+/** Сума + к-сть донатів за фільтром (для periodTotals у шапці); донати поза грою не рахуються. */
 async function donationTotal(
   db: PrismaClient,
   userId: string,
   extra: { createdAt?: { gte?: Date; lt?: Date }; streamId?: string; collectionId?: string },
 ): Promise<PeriodTotal> {
-  const a = await db.donation.aggregate({ where: { userId, ...extra }, _sum: { amount: true }, _count: true });
+  const a = await db.donation.aggregate({ where: { userId, outOfGame: false, ...extra }, _sum: { amount: true }, _count: true });
   return { sumUah: a._sum.amount?.toNumber() ?? 0, count: a._count };
 }
 
@@ -288,8 +294,12 @@ export async function getState(
     : opts.collectionId
       ? { userId, collectionId: opts.collectionId }
       : { userId, ...(createdAt ? { createdAt } : {}) };
+  // Глядач (публічна/оверлеї) не бачить донати «поза грою» — ні у стрічці, ні в сумі (варіант B).
+  // Оператор (audience 'admin') бачить їх у СТРІЧЦІ (з міткою — його облік), але статистика-сума
+  // всюди рахує лише донати в грі.
+  if (opts.audience === 'viewer') (donWhere as Prisma.DonationWhereInput).outOfGame = false;
 
-  const totals = await db.donation.aggregate({ where: donWhere, _sum: { amount: true } });
+  const totals = await db.donation.aggregate({ where: { ...donWhere, outOfGame: false }, _sum: { amount: true } });
   const totalRaisedUah = totals._sum.amount?.toNumber() ?? 0;
 
   const baseLb = opts.streamId
@@ -328,11 +338,13 @@ export async function getState(
       ? censorText(d.message, { mode: 'mask', added: comments.added, allowed: comments.allowed }).trim()
       : commentForDisplay(d.message, d.settlement?.name ?? null, comments),
     city: d.settlement?.name ?? null,
+    settlementId: d.settlementId,
     points: d.pointsAwarded.toNumber(),
     at: d.createdAt.getTime(),
     collectionId: d.collectionId,
     newCity: d.settlementId !== null && openers.get(openerKey(d.settlementId, d.collectionId)) === d.id,
     abroad: d.settlement != null && d.settlement.country !== 'UA',
+    outOfGame: d.outOfGame,
   }));
 
   const map = await mapPoints(db, userId, window, {

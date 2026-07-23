@@ -1,6 +1,6 @@
 import { test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchJars, setWebhook, MonoApiError } from '../lib/monobank';
+import { fetchJars, setWebhook, jarUrlFromSendId, MonoApiError } from '../lib/monobank';
 
 const realFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = realFetch; });
@@ -17,13 +17,20 @@ test('fetchJars: віддає банки з копійками→грн, ток�
     seenToken = new Headers(init?.headers).get('X-Token') ?? '';
     return new Response(JSON.stringify({
       name: 'Тест',
-      jars: [{ id: 'acc1', title: 'На дрони', balance: 150050, goal: null }],
+      jars: [{ id: 'acc1', sendId: 'jar/AbCd1234', title: 'На дрони', balance: 150050, goal: null }],
     }), { status: 200 });
   }) as typeof fetch;
   const jars = await fetchJars('tok123');
   assert.equal(seenUrl, 'https://api.monobank.ua/personal/client-info');
   assert.equal(seenToken, 'tok123');
-  assert.deepEqual(jars, [{ id: 'acc1', title: 'На дрони', balanceUah: 1500.5 }]);
+  assert.deepEqual(jars, [{ id: 'acc1', sendId: 'jar/AbCd1234', title: 'На дрони', balanceUah: 1500.5 }]);
+});
+
+test('jarUrlFromSendId: sendId уже містить jar/ — сегмент не дублюється', () => {
+  assert.equal(jarUrlFromSendId('jar/AbCd1234'), 'https://send.monobank.ua/jar/AbCd1234');
+  // захист від зайвого слеша чи випадкового повного URL
+  assert.equal(jarUrlFromSendId('/jar/AbCd1234'), 'https://send.monobank.ua/jar/AbCd1234');
+  assert.equal(jarUrlFromSendId('https://send.monobank.ua/jar/AbCd1234'), 'https://send.monobank.ua/jar/AbCd1234');
 });
 
 test('fetchJars: без банок → порожній список (jars відсутнє у відповіді)', async () => {

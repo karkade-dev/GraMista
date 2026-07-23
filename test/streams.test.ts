@@ -157,7 +157,7 @@ test('updateStream: нотатки (notes) — задати й очистити'
   assert.equal(cleared!.notes, null);
 });
 
-test('streamReportText: рядки звіту (назва, сума, бали, топ міст, посилання)', () => {
+test('streamReportText: усі міста стріму списком із балами (не лише топ-3)', () => {
   const text = streamReportText({
     id: 'x', name: 'Тест-стрім', url: 'https://twitch.tv/v', notes: null,
     startedAt: new Date(), endedAt: new Date(), durationMs: 3_600_000,
@@ -165,12 +165,29 @@ test('streamReportText: рядки звіту (назва, сума, бали, �
     topCities: [
       { settlementId: 'kyiv', name: 'Київ', points: 8 },
       { settlementId: 'lviv', name: 'Львів', points: 4.5 },
+      { settlementId: 'odesa', name: 'Одеса', points: 3 },
+    ],
+    cities: [
+      { settlementId: 'kyiv', name: 'Київ', points: 8 },
+      { settlementId: 'lviv', name: 'Львів', points: 4.5 },
+      { settlementId: 'odesa', name: 'Одеса', points: 3 },
+      { settlementId: 'kalush', name: 'Калуш', points: 1.2 },
     ],
   });
   assert.ok(text.includes('Тест-стрім'), 'назва');
   assert.ok(text.includes('Зібрано'), 'сума');
-  assert.ok(text.includes('Київ') && text.includes('Львів'), 'топ міст');
+  assert.ok(text.includes('1. Київ — 8'), 'місто з балами окремим рядком');
+  assert.ok(text.includes('4. Калуш — 1.2'), 'четверте місто теж у звіті (повний перелік)');
   assert.ok(text.includes('twitch.tv/v'), 'посилання');
+});
+
+test('streamSummary: cities — повний список міст стріму (для звіту)', async () => {
+  const a = await getStream(testDb, U, aId);
+  assert.ok(a);
+  const shaped = a!.summary.cities.map((c) => [c.settlementId, r4(c.points)]);
+  assert.deepEqual(shaped, [['lviv', 2], ['kyiv', 1.5]]);
+  // topCities — зріз того самого списку (чипи в списку стрімів і картинка-банер)
+  assert.deepEqual(a!.summary.topCities, a!.summary.cities.slice(0, 3));
 });
 
 test('updateStream: посилання на стрім (url) — задати, лишити, очистити', async () => {

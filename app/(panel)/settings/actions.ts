@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/db';
 import { requireUserId } from '@/lib/session';
-import { fetchJars, setWebhook, MonoApiError } from '@/lib/monobank';
+import { fetchJars, setWebhook, jarUrlFromSendId, MonoApiError } from '@/lib/monobank';
 import { validateHandle } from '@/lib/handle';
 import { regenerateOverlayKey, regenerateDockKey, userIdByHandle } from '@/lib/publicUser';
 import { parseWordList } from '@/lib/censor';
@@ -13,11 +13,13 @@ import { BASE_BANNED } from '@/lib/censorWords';
 // Тонкі Server Actions /settings: Zod-валідація → lib/Prisma → ревалідація. Невалідні дані
 // (поганий/зайнятий слаг) тихо не зберігаються (MVP без тостів — борг).
 
+// monobankJarUrl тут свідомо немає: посилання на банку більше не редагується вручну —
+// його заповнює connectMonoJarAction із sendId підключеної банки.
 const profileSchema = z.object({
   handle: z.string().optional(),
-  monobankJarUrl: z.string().url().or(z.literal('')).optional(),
   twitchUrl: z.string().url().or(z.literal('')).optional(),
   youtubeUrl: z.string().url().or(z.literal('')).optional(),
+  telegramUrl: z.string().url().or(z.literal('')).optional(),
   // Чекбокс HTML-форми: 'on' коли увімкнено, відсутній — коли ні.
   publicShowStreams: z.literal('on').optional(),
   showOnGlobalMap: z.literal('on').optional(),
@@ -32,14 +34,14 @@ export async function saveProfileAction(formData: FormData): Promise<void> {
   const parsed = profileSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
   const data: {
-    monobankJarUrl: string | null; twitchUrl: string | null; youtubeUrl: string | null;
+    twitchUrl: string | null; youtubeUrl: string | null; telegramUrl: string | null;
     publicShowStreams: boolean; showOnGlobalMap: boolean;
     abroadCities: boolean; abroadWorldMap: boolean; abroadTopMode: string; abroadHideAggressor: boolean;
     handle?: string;
   } = {
-    monobankJarUrl: parsed.data.monobankJarUrl || null,
     twitchUrl: parsed.data.twitchUrl || null,
     youtubeUrl: parsed.data.youtubeUrl || null,
+    telegramUrl: parsed.data.telegramUrl || null,
     publicShowStreams: parsed.data.publicShowStreams === 'on',
     showOnGlobalMap: parsed.data.showOnGlobalMap === 'on',
     abroadCities: parsed.data.abroadCities === 'on',
@@ -139,7 +141,7 @@ export async function restoreWordAction(word: string): Promise<void> {
 const tokenSchema = z.object({ token: z.string().trim().min(20, 'Схоже, це не токен monobank') });
 
 export interface MonoConnectState {
-  jars?: { id: string; title: string }[];
+  jars?: { id: string; sendId: string; title: string }[];
   ok?: boolean;
   error?: string;
 }
@@ -151,7 +153,7 @@ export async function listMonoJarsAction(_prev: MonoConnectState, formData: Form
   try {
     const jars = await fetchJars(parsed.data.token);
     if (jars.length === 0) return { error: 'У цьому акаунті monobank немає банок' };
-    return { jars: jars.map(({ id, title }) => ({ id, title })) };
+    return { jars: jars.map(({ id, sendId, title }) => ({ id, sendId, title })) };
   } catch (e) {
     return { error: e instanceof MonoApiError ? e.message : 'Не вдалося звернутись до monobank' };
   }
@@ -160,6 +162,7 @@ export async function listMonoJarsAction(_prev: MonoConnectState, formData: Form
 const connectSchema = z.object({
   token: z.string().trim().min(20),
   jarId: z.string().min(1),
+  sendId: z.string().min(1),
   jarTitle: z.string().min(1),
 });
 
@@ -184,12 +187,15 @@ export async function connectMonoJarAction(_prev: MonoConnectState, formData: Fo
     status: 'active',
     lastEventAt: null,
   };
+  // Підключена банка стає джерелом донат-посилання: обрав банку → її send-лінк
+  // (з sendId) публікується глядачам. Джерело й посилання пишемо атомарно.
   const existing = await prisma.donationSource.findFirst({ where: { userId: U, type: 'monobank' } });
-  if (existing) {
-    await prisma.donationSource.update({ where: { id: existing.id }, data });
-  } else {
-    await prisma.donationSource.create({ data: { userId: U, type: 'monobank', ...data } });
-  }
+  await prisma.$transaction([
+    existing
+      ? prisma.donationSource.update({ where: { id: existing.id }, data })
+      : prisma.donationSource.create({ data: { userId: U, type: 'monobank', ...data } }),
+    prisma.user.update({ where: { id: U }, data: { monobankJarUrl: jarUrlFromSendId(parsed.data.sendId) } }),
+  ]);
   revalidatePath('/settings');
   return { ok: true };
 }

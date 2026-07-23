@@ -1,6 +1,5 @@
 import { Prisma, type PrismaClient, type DonationStatus } from '@prisma/client';
 import { z } from 'zod';
-import { anonymize } from './anonymize';
 import { formatDateTime } from './format';
 import { windowFor, createdAtWhere, type Range } from './period';
 import { cityOpeners, openerKey } from './newCity';
@@ -13,17 +12,25 @@ export const DONATIONS_PER_PAGE = 30;
 
 export interface DonationRow {
   externalId: string;
-  /** Анонімізоване ім'я («Ім'я П.») — назовні повне ім'я не світимо. */
+  /**
+   * ПОВНЕ ім'я донатера — це приватна панель стрімера (за логіном, власні донати),
+   * як і док /dock. Анонімізація («Ім'я П.») — лише назовні (публічна, /ukraine, оверлеї).
+   * Показ = те, за чим шукаємо (buildWhere по donorName+message), інакше пошук за видимим ім'ям мовчить.
+   */
   who: string;
   amountUah: number;
   message: string;
   city: string | null;
+  /** id розпізнаного міста (для навчання синоніму кліком по коментарю); null — нерозпізнано. */
+  settlementId: string | null;
   status: DonationStatus;
   points: number;
   /** createdAt у мс. */
   at: number;
   /** Стрім, до якого прив'язаний донат (для перенесення); null — без стріму. */
   streamId: string | null;
+  /** Донат поза грою (балів не дає, схований від глядачів). */
+  outOfGame: boolean;
 }
 
 /** Статус для фільтра (§17.2): розпізнано (з балами) / скарбничка (місто є, балів ще 0) / нерозпізнано. */
@@ -72,7 +79,14 @@ type DonationRecord = Prisma.DonationGetPayload<{ include: { settlement: { selec
 function buildWhere(userId: string, f: DonationFilter): Prisma.DonationWhereInput {
   const where: Prisma.DonationWhereInput = { userId };
   const search = f.search?.trim();
-  if (search) where.donorName = { contains: search, mode: 'insensitive' };
+  // Одне поле пошуку покриває і донатера, і фразу з коментаря. OR тут безпечний:
+  // із курсорною умовою buildWhere комбінується через AND: [base, beyond(...)].
+  if (search) {
+    where.OR = [
+      { donorName: { contains: search, mode: 'insensitive' } },
+      { message: { contains: search, mode: 'insensitive' } },
+    ];
+  }
   if (f.minUah != null || f.maxUah != null) {
     where.amount = {
       ...(f.minUah != null ? { gte: f.minUah } : {}),
@@ -130,14 +144,16 @@ const flip = (dir: DonationSortDir): DonationSortDir => (dir === 'desc' ? 'asc' 
 function toRow(d: DonationRecord): DonationRow {
   return {
     externalId: d.externalId,
-    who: anonymize(d.donorName) || '(без імені)',
+    who: d.donorName || '(без імені)',
     amountUah: d.amount.toNumber(),
     message: d.message,
     city: d.settlement?.name ?? null,
+    settlementId: d.settlementId,
     status: d.status,
     points: d.pointsAwarded.toNumber(),
     at: d.createdAt.getTime(),
     streamId: d.streamId,
+    outOfGame: d.outOfGame,
   };
 }
 
@@ -229,6 +245,8 @@ export interface DockDonationRow {
   /** Сирий коментар (не цензурований) — як адмінська історія. */
   message: string;
   city: string | null;
+  /** id розпізнаного міста (для навчання синоніму кліком по коментарю); null — нерозпізнано. */
+  settlementId: string | null;
   status: DonationStatus;
   points: number;
   at: number;
@@ -236,6 +254,8 @@ export interface DockDonationRow {
   collectionId: string | null;
   /** Донат відкрив місто (перший PointEvent у його зборі) — бейдж 🆕. */
   newCity: boolean;
+  /** Донат поза грою (балів не дає, схований від глядачів). */
+  outOfGame: boolean;
 }
 
 export interface DockDonationPage {
@@ -270,7 +290,7 @@ export async function listDonationsForDock(
     take: perPage,
     select: {
       id: true, externalId: true, donorName: true, amount: true, message: true,
-      status: true, pointsAwarded: true, createdAt: true,
+      status: true, pointsAwarded: true, createdAt: true, outOfGame: true,
       settlementId: true, collectionId: true,
       settlement: { select: { name: true } },
     },
@@ -287,11 +307,13 @@ export async function listDonationsForDock(
     amountUah: d.amount.toNumber(),
     message: d.message,
     city: d.settlement?.name ?? null,
+    settlementId: d.settlementId,
     status: d.status,
     points: d.pointsAwarded.toNumber(),
     at: d.createdAt.getTime(),
     collectionId: d.collectionId,
     newCity: d.settlementId ? openers.get(openerKey(d.settlementId, d.collectionId)) === d.id : false,
+    outOfGame: d.outOfGame,
   }));
 
   return { rows, total, page, perPage, pageCount };
@@ -312,7 +334,7 @@ const STATUS_LABEL: Record<DonationStatus, string> = {
 
 /**
  * Рядки → CSV-рядок (UTF-8 з BOM, щоб Excel правильно показав кирилицю).
- * Ім'я — анонімізоване (як на екрані; повне ім'я назовні не виводимо).
+ * Ім'я — повне (як на екрані вкладки «Донати»): це приватний експорт стрімером власних даних.
  */
 export function donationsToCsv(rows: DonationRow[]): string {
   const header = ['Дата/час', 'Донатер', 'Сума, ₴', 'Місто', 'Статус', 'Бали', 'Повідомлення'];

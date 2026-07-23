@@ -51,23 +51,34 @@ after(async () => {
   await testDb.$disconnect();
 });
 
-test('collectionReportText: текст звіту (назва, зібрано/ціль/%, топ міст)', () => {
+test('collectionReportText: текст звіту — назва, зібрано/ціль/%, УСІ міста з балами', () => {
   const text = collectionReportText({
     id: 'x', name: 'На авто', goalUah: 1000, raisedUah: 750, percent: 75,
     seedUah: 0, displayedUah: 750, displayedPercent: 75,
     status: 'active', startAt: new Date(), endAt: null, streamCount: 2,
-    topCities: [{ settlementId: 'kyiv', name: 'Київ', points: 5 }],
+    topCities: [
+      { settlementId: 'kyiv', name: 'Київ', points: 5 },
+      { settlementId: 'lviv', name: 'Львів', points: 4 },
+      { settlementId: 'odesa', name: 'Одеса', points: 3 },
+    ],
+    cities: [
+      { settlementId: 'kyiv', name: 'Київ', points: 5 },
+      { settlementId: 'lviv', name: 'Львів', points: 4 },
+      { settlementId: 'odesa', name: 'Одеса', points: 3 },
+      { settlementId: 'kalush', name: 'Калуш', points: 1.2 },
+    ],
   });
   assert.ok(text.includes('На авто'), 'назва');
   assert.ok(text.includes('75%'), 'відсоток');
-  assert.ok(text.includes('Київ'), 'топ міст');
+  assert.ok(text.includes('1. Київ — 5'), 'місто з балами окремим рядком');
+  assert.ok(text.includes('4. Калуш — 1.2'), 'четверте місто теж у звіті (повний перелік)');
 });
 
 test('collectionReportText: «Зібрано» рахує displayed (seed+донати)', () => {
   const text = collectionReportText({
     id: 'x', name: 'Прод', goalUah: 1000, raisedUah: 300, percent: 30,
     seedUah: 200, displayedUah: 500, displayedPercent: 50,
-    status: 'active', startAt: new Date(), endAt: null, streamCount: 0, topCities: [],
+    status: 'active', startAt: new Date(), endAt: null, streamCount: 0, topCities: [], cities: [],
   });
   assert.ok(text.includes('50%'), 'відсоток від displayed');
   assert.ok(text.includes('500'), 'сума з урахуванням стартової');
@@ -82,6 +93,8 @@ test('collectionSummary: зібрано = донати з позначкою з�
   assert.equal(sum.raisedUah, 800);
   assert.equal(sum.percent, 40);
   assert.equal(sum.topCities[0]?.settlementId, 'kyiv');
+  // повний список міст збору — для звіту
+  assert.deepEqual(sum.cities.map((x) => x.settlementId), ['kyiv', 'lviv']);
 });
 
 test('collectionSummary: seedUah додається у displayed, але не в raised/percent', async () => {

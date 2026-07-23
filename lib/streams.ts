@@ -21,7 +21,10 @@ export interface StreamSummary extends StreamRow {
   sumUah: number;
   donations: number;
   points: number;
+  /** Топ-3 — чипи в списку стрімів і картинка-банер. Зріз cities. */
   topCities: LeaderRow[];
+  /** Повний список міст стріму з балами (без обмеження) — звіт-пост і drill-down. */
+  cities: LeaderRow[];
 }
 
 function toRow(s: Stream): StreamRow {
@@ -36,10 +39,9 @@ export function streamReportText(s: StreamSummary): string {
     `💰 Зібрано ${formatUah(s.sumUah)} · ${s.donations} донат.`,
     `🏙️ Балів містам: ${formatPoints(s.points)}`,
   ];
-  if (s.topCities.length > 0) {
-    lines.push(
-      '🏆 Топ міст: ' + s.topCities.map((c, i) => `${i + 1}. ${c.name} (${formatPoints(c.points)})`).join(' · '),
-    );
+  if (s.cities.length > 0) {
+    lines.push('🏆 Міста стріму:');
+    for (const [i, c] of s.cities.entries()) lines.push(`${i + 1}. ${c.name} — ${formatPoints(c.points)}`);
   }
   if (s.url) lines.push(`▶ ${s.url}`);
   return lines.join('\n');
@@ -75,18 +77,19 @@ export function streamComparison(
   }));
 }
 
-/** Підсумок одного стріму: тривалість, сума, кількість донатів, бали, топ-3 міста. */
+/** Підсумок одного стріму: тривалість, сума, кількість донатів, бали, всі міста з балами. */
 export async function streamSummary(db: PrismaClient, userId: string, s: StreamRow): Promise<StreamSummary> {
-  const don = await db.donation.aggregate({ where: { userId, streamId: s.id }, _sum: { amount: true }, _count: true });
+  const don = await db.donation.aggregate({ where: { userId, streamId: s.id, outOfGame: false }, _sum: { amount: true }, _count: true });
   const pts = await db.pointEvent.aggregate({ where: { userId, streamId: s.id }, _sum: { points: true } });
-  const topCities = await leaderboard(db, userId, { streamIds: [s.id], limit: 3 });
+  const cities = await leaderboard(db, userId, { streamIds: [s.id], limit: null });
   return {
     ...s,
     durationMs: (s.endedAt ?? new Date()).getTime() - s.startedAt.getTime(),
     sumUah: don._sum.amount?.toNumber() ?? 0,
     donations: don._count,
     points: pts._sum.points?.toNumber() ?? 0,
-    topCities,
+    topCities: cities.slice(0, 3),
+    cities,
   };
 }
 
@@ -206,7 +209,7 @@ export async function getStreams(
   return out;
 }
 
-/** Drill-down: підсумок стріму + топ міст усередині нього. */
+/** Drill-down: підсумок стріму + топ міст усередині нього (той самий список, що в summary.cities). */
 export async function getStream(
   db: PrismaClient,
   userId: string,
@@ -215,8 +218,7 @@ export async function getStream(
   const s = await db.stream.findFirst({ where: { id, userId } });
   if (!s) return null;
   const summary = await streamSummary(db, userId, toRow(s));
-  const cities = await leaderboard(db, userId, { streamIds: [id], limit: 200 });
-  return { summary, cities };
+  return { summary, cities: summary.cities };
 }
 
 /** Комбо: об'єднаний топ + сума по кількох стрімах. */
@@ -228,8 +230,8 @@ export async function getCombined(
 ): Promise<{ streams: StreamSummary[]; leaderboard: LeaderRow[]; sumUah: number }> {
   const streams = await db.stream.findMany({ where: { userId, id: { in: ids } } });
   const summaries = await Promise.all(streams.map((s) => streamSummary(db, userId, toRow(s))));
-  const lb = await leaderboard(db, userId, { streamIds: ids, limit: 200, asc });
-  const sum = await db.donation.aggregate({ where: { userId, streamId: { in: ids } }, _sum: { amount: true } });
+  const lb = await leaderboard(db, userId, { streamIds: ids, limit: null, asc });
+  const sum = await db.donation.aggregate({ where: { userId, streamId: { in: ids }, outOfGame: false }, _sum: { amount: true } });
   return { streams: summaries, leaderboard: lb, sumUah: sum._sum.amount?.toNumber() ?? 0 };
 }
 

@@ -16,6 +16,8 @@ export type AdminActionType =
   | 'addAlias'
   | 'resetCity'
   | 'resetAll'
+  // Вивести/повернути окремий донат у гру (поштучно, оборотно).
+  | 'setDonationGame'
   // Дії адміна СЕРВІСУ (не плутати з Адмінкою стрімера). Тривіально оборотні тим самим
   // екраном — undoable=false.
   | 'setFeaturedCollection'
@@ -107,6 +109,9 @@ export async function undoAdminAction(
       case 'addAlias':
         done = await undoAlias(tx, p.aliasId as string);
         break;
+      case 'setDonationGame':
+        done = await undoSetGame(tx, userId, p.externalId as string, p.from as string, p.to as string, p.settlementId as string | null);
+        break;
       default:
         return { ok: false, reason: 'not_undoable' };
     }
@@ -171,5 +176,19 @@ async function undoAdjust(tx: Tx, userId: string, pointEventId: string): Promise
 /** Відкат додавання синоніма: прибрати створений аліас (ідемпотентно). */
 async function undoAlias(tx: Tx, aliasId: string): Promise<boolean> {
   await tx.settlementAlias.deleteMany({ where: { id: aliasId } });
+  return true;
+}
+
+/** Відкат виведення/повернення донату в гру: повернути попередню позначку + перерахунок пари (якщо є місто). */
+async function undoSetGame(tx: Tx, userId: string, externalId: string, from: string, to: string, settlementId: string | null): Promise<boolean> {
+  const d = await tx.donation.findUnique({ where: { userId_externalId: { userId, externalId } } });
+  const toBool = to === 'true';
+  const fromBool = from === 'true';
+  if (!d || d.settlementId !== settlementId || d.outOfGame !== toBool) return false; // стан змінився пізніше
+  await tx.donation.update({
+    where: { id: d.id },
+    data: { outOfGame: fromBool, ...(fromBool ? { pointsAwarded: new Prisma.Decimal(0) } : {}) },
+  });
+  if (settlementId) await recomputeDonorCityChain(tx, userId, d.donorName, settlementId, d.collectionId);
   return true;
 }

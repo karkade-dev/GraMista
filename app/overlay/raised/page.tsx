@@ -17,7 +17,7 @@ export default async function RaisedOverlay({ searchParams }: { searchParams: SP
   if (!U) return <div className="ov-empty">Силку оверлея не розпізнано. Відкрий «Оверлеї» в панелі й скопіюй свіже посилання.</div>;
   const cfg = parseOverlayConfig(sp, { period: 'stream' });
 
-  let where: { userId: string; streamId?: string; collectionId?: string; createdAt?: { gte?: Date; lt?: Date } };
+  let where: { userId: string; outOfGame: boolean; streamId?: string; collectionId?: string; createdAt?: { gte?: Date; lt?: Date } };
   // seedUah ≠ 0 лише для періоду «за збір»: стартова сума додається до показу бара, не до інших періодів.
   let seedUah = 0;
   // Фактичний період показу: коли стріму/збору нема, скоуп падає на «весь час» — і підпис теж,
@@ -29,15 +29,15 @@ export default async function RaisedOverlay({ searchParams }: { searchParams: SP
       orderBy: { startedAt: 'desc' },
       select: { id: true },
     });
-    if (s) where = { userId: U, streamId: s.id };
-    else { where = { userId: U }; effective = 'all'; }
+    if (s) where = { userId: U, outOfGame: false, streamId: s.id };
+    else { where = { userId: U, outOfGame: false }; effective = 'all'; }
   } else if (cfg.period === 'collection') {
     const col = await getActiveCollection(prisma, U);
-    if (col) { where = { userId: U, collectionId: col.id }; seedUah = col.seedUah.toNumber(); }
-    else { where = { userId: U }; effective = 'all'; }
+    if (col) { where = { userId: U, outOfGame: false, collectionId: col.id }; seedUah = col.seedUah.toNumber(); }
+    else { where = { userId: U, outOfGame: false }; effective = 'all'; }
   } else {
     const ca = createdAtWhere(windowFor(cfg.period as Range));
-    where = { userId: U, ...(ca ? { createdAt: ca } : {}) };
+    where = { userId: U, outOfGame: false, ...(ca ? { createdAt: ca } : {}) };
   }
   const agg = await prisma.donation.aggregate({ where, _sum: { amount: true } });
   const sum = (agg._sum.amount?.toNumber() ?? 0) + seedUah;

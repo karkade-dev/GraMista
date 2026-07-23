@@ -40,13 +40,17 @@ export function CityCardHost({ handle, jarUrl }: { handle: string; jarUrl: strin
         {formatPoints(detail.points)} {pluralBaliv(detail.points)}
         {detail.oblast ? ` · ${detail.oblast}` : ''}
       </div>
-      {detail.recent.length > 0 ? (
-        detail.recent.slice(0, 3).map((d, i) => (
-          <div className="cdon" key={i}>
-            <span>{d.who}</span>
-            <span className="a">+{formatUah(d.amountUah)}</span>
-          </div>
-        ))
+      {detail.topDonors.length > 0 ? (
+        <>
+          <div className="cdcap">Топ донатерів</div>
+          {detail.topDonors.slice(0, 5).map((d, i) => (
+            <div className="cdon" key={i}>
+              <span>{d.who}</span>
+              {d.count > 1 && <span className="n">×{d.count}</span>}
+              <span className="a">+{formatUah(d.totalUah)}</span>
+            </div>
+          ))}
+        </>
       ) : (
         <div className="cdon" style={{ color: 'var(--ink-3)' }}>ще без донатів — виправ це 😉</div>
       )}

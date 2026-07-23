@@ -102,6 +102,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                     <div className="ui-body">
                       <div className="ui-top">
                         <span className="ui-name">{d.who}</span>
+                        {d.outOfGame && (
+                          <span className="oog-badge" title="Донат поза грою: призначення міста запише місто, але в гру його поверне лише кнопка «✅ у гру» (Донати/док).">
+                            поза грою
+                          </span>
+                        )}
                         <span className="ui-sum">+{formatUah(d.amountUah)}</span>
                       </div>
                       {d.message && <div className="ui-comment">{d.message}</div>}

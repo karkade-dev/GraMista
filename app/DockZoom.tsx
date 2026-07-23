@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
 
-// Масштаб доку: A−/A+ міняють zoom кореня .dock-root і зберігають у localStorage (per-браузер).
+// Масштаб доку: A−/A+ міняють zoom внутрішнього .dk (НЕ кореня — .dock-root є скрол-контейнером,
+// і zoom на ньому ламає розрахунок скролпорту) і зберігають у localStorage (per-браузер).
 // Старт — збережене значення або initialScale зі силки (?scale). 50..200%, крок 10.
 const KEY = 'gramista.dock.scale';
 
@@ -14,8 +15,8 @@ export function DockZoom({ initialScale }: { initialScale: number }) {
   }, []);
 
   useEffect(() => {
-    const root = document.querySelector('.dock-root') as HTMLElement | null;
-    if (root) root.style.zoom = String(scale / 100);
+    const dk = document.querySelector('.dock-root .dk') as HTMLElement | null;
+    if (dk) dk.style.zoom = String(scale / 100);
     localStorage.setItem(KEY, String(scale));
   }, [scale]);
 

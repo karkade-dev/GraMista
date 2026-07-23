@@ -48,6 +48,7 @@ test("показує ПОВНЕ ім'я і СИРИЙ коментар (не а�
   assert.equal(p.rows[0]?.who, 'Дмитро Петренко'); // НЕ «Дмитро П.»
   assert.equal(p.rows[0]?.message, 'привіт усім');
   assert.equal(p.rows[0]?.collectionId, null); // поза збором
+  assert.equal(p.rows[0]?.settlementId, null); // нерозпізнано → нема міста (для навчання синоніму)
 });
 
 test('🆕 newCity: відкривач міста — true, наступні — false', async () => {
@@ -57,6 +58,7 @@ test('🆕 newCity: відкривач міста — true, наступні —
   const byId = Object.fromEntries(p.rows.map((r) => [r.externalId, r]));
   assert.equal(byId['k1']?.newCity, true);
   assert.equal(byId['k2']?.newCity, false);
+  assert.equal(byId['k1']?.settlementId, 'kyiv'); // розпізнане місто → доступне для навчання синоніму
 });
 
 test('фільтр since (період «сьогодні») — старі поза вікном', async () => {

@@ -72,6 +72,19 @@ test('битва міст УВІМКНЕНА (дефолт) → донат із 
   );
 });
 
+test('битва ВИМКНЕНА → донат позначається outOfGame=true', async () => {
+  await testDb.user.update({ where: { id: U }, data: { cityBattle: false } });
+  await processDonation(testDb, U, { externalId: 'oog1', donorName: 'Орест', amountUah: 300, message: 'Львів!' });
+  const d = await testDb.donation.findFirst({ where: { userId: U, externalId: 'oog1' } });
+  assert.equal(d?.outOfGame, true);
+});
+
+test('битва УВІМКНЕНА → донат outOfGame=false', async () => {
+  await processDonation(testDb, U, { externalId: 'oog2', donorName: 'Орест', amountUah: 300, message: 'Львів!' });
+  const d = await testDb.donation.findFirst({ where: { userId: U, externalId: 'oog2' } });
+  assert.equal(d?.outOfGame, false);
+});
+
 test('донат під час активного стріму прив’язується до нього', async () => {
   const s = await startStream(testDb, U, 'Ефір');
   await processDonation(testDb, U, {

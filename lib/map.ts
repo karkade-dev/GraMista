@@ -42,10 +42,12 @@ export async function donationFlash(
       id: true,
       amount: true,
       collectionId: true,
+      outOfGame: true,
       settlement: { select: { id: true, name: true, lat: true, lon: true, country: true } },
       user: { select: { abroadWorldMap: true } },
     },
   });
+  if (d?.outOfGame) return null; // поза грою — глядачам не світимо
   const s = d?.settlement;
   if (!s || s.lat == null || s.lon == null) return null;
   const abroad = s.country !== 'UA';

@@ -1,0 +1,96 @@
+// АВТОЗГЕНЕРОВАНО scripts/gen-chornobyl-zone.ts — не редагувати вручну (перегенеруй).
+// Курований довідник НП Чорнобильської зони відчуження (покинуті GeoNames-PPLQ + Дуга/Зимовище/Усів).
+// КАТОТТГ не дає їх на рівні 4 (Прип'ять/Чорнобиль — рівень 1, решта зняті з обліку), тож сідаємо
+// окремо з реальними координатами. Упсертять prisma/seed.ts і prisma/import-settlements.ts.
+
+export interface ZoneSettlement {
+  id: string;
+  name: string;
+  type: string;
+  oblast: string;
+  population: number | null;
+  lat: number;
+  lon: number;
+  aliases: string[];
+}
+
+export const CHORNOBYL_ZONE: ZoneSettlement[] = [
+  { id: "cz-696269", name: "Прип'ять", type: "місто", oblast: "Київська", population: 49360, lat: 51.40541, lon: 30.05803, aliases: ["Prypyat","Припят","Припять","Припјат","Pripyat"] },
+  { id: "cz-710403", name: "Чорнобиль", type: "місто", oblast: "Київська", population: 14000, lat: 51.27013, lon: 30.21968, aliases: ["Chornobyl","Чернобил","Чернобиљ","Chernobyl","ЧАЕС"] },
+  { id: "cz-707694", name: "Іллінці", type: "село", oblast: "Київська", population: 37, lat: 51.29513, lon: 29.85816, aliases: ["Illintsi"] },
+  { id: "cz-691680", name: "Теремці", type: "село", oblast: "Київська", population: 36, lat: 51.23436, lon: 30.50166, aliases: ["Teremtsi"] },
+  { id: "cz-703659", name: "Купувате", type: "село", oblast: "Київська", population: 32, lat: 51.15923, lon: 30.35906, aliases: ["Kupuvate","Куповатое"] },
+  { id: "cz-698473", name: "Опачичі", type: "село", oblast: "Київська", population: 20, lat: 51.20335, lon: 30.3237, aliases: ["Opachychi","Опачичи"] },
+  { id: "cz-697987", name: "Паришів", type: "село", oblast: "Київська", population: 16, lat: 51.28457, lon: 30.32142, aliases: ["Paryshiv","Паришев"] },
+  { id: "cz-702715", name: "Луб’янка", type: "село", oblast: "Київська", population: 12, lat: 51.3215, lon: 29.75171, aliases: ["Lubyanka"] },
+  { id: "cz-698168", name: "Оташів", type: "село", oblast: "Київська", population: 10, lat: 51.20045, lon: 30.38818, aliases: ["Otashiv"] },
+  { id: "cz-696705", name: "Поліське", type: "селище міського типу", oblast: "Київська", population: 10, lat: 51.24141, lon: 29.38618, aliases: ["Poliske","Кагановичі Перші","Полесское","Хабне","Хабное"] },
+  { id: "cz-703429", name: "Ладижичі", type: "село", oblast: "Київська", population: 8, lat: 51.25163, lon: 30.41408, aliases: ["Ladyzhychi"] },
+  { id: "cz-695174", name: "Рудня-Іллінецька", type: "село", oblast: "Київська", population: 8, lat: 51.28479, lon: 29.81272, aliases: ["Rudnya-Illinetska"] },
+  { id: "cz-687814", name: "Залісся", type: "село", oblast: "Київська", population: 5, lat: 51.25397, lon: 30.18863, aliases: ["Zalissya","Залесье"] },
+  { id: "cz-689602", name: "Вільча", type: "селище міського типу", oblast: "Київська", population: 3, lat: 51.36335, lon: 29.42897, aliases: ["Vilcha"] },
+  { id: "cz-699156", name: "Новошепеличі", type: "село", oblast: "Київська", population: 2, lat: 51.42274, lon: 30.01897, aliases: ["Novoshepelychi","Новошепеличи"] },
+  { id: "cz-8392012", name: "Андріївка", type: "село", oblast: "Київська", population: null, lat: 51.13079, lon: 30.08975, aliases: ["Andriivka"] },
+  { id: "cz-8390099", name: "Бички", type: "село", oblast: "Київська", population: null, lat: 51.21186, lon: 29.87605, aliases: ["Bychky"] },
+  { id: "cz-712027", name: "Бобер", type: "село", oblast: "Київська", population: null, lat: 51.15624, lon: 29.54343, aliases: ["Bober"] },
+  { id: "cz-706122", name: "Бовище", type: "село", oblast: "Київська", population: null, lat: 51.34428, lon: 29.75298, aliases: ["Bovyshche"] },
+  { id: "cz-692912", name: "Буда", type: "село", oblast: "Київська", population: null, lat: 51.39202, lon: 29.7739, aliases: ["Buda"] },
+  { id: "cz-711323", name: "Буда-Варовичі", type: "село", oblast: "Київська", population: null, lat: 51.3221, lon: 29.48569, aliases: ["Buda-Varovychi"] },
+  { id: "cz-711170", name: "Буряківка", type: "село", oblast: "Київська", population: null, lat: 51.3835, lon: 29.91581, aliases: ["Buriakivka"] },
+  { id: "cz-690474", name: "Варовичі", type: "село", oblast: "Київська", population: null, lat: 51.28774, lon: 29.55752, aliases: ["Varovychi"] },
+  { id: "cz-8389613", name: "Весняне", type: "село", oblast: "Київська", population: null, lat: 51.30583, lon: 29.64142, aliases: ["Vesniane"] },
+  { id: "cz-706144", name: "Вільшанка", type: "село", oblast: "Київська", population: null, lat: 51.32009, lon: 29.69385, aliases: ["Vilshanka"] },
+  { id: "cz-689384", name: "Володимирівка", type: "село", oblast: "Київська", population: null, lat: 51.22883, lon: 29.3046, aliases: ["Volodymyrivka"] },
+  { id: "cz-708775", name: "Глинка", type: "село", oblast: "Київська", population: null, lat: 51.2417, lon: 29.90499, aliases: ["Hlynka"] },
+  { id: "cz-708344", name: "Городище", type: "село", oblast: "Київська", population: null, lat: 51.14015, lon: 30.39121, aliases: ["Horodyshche"] },
+  { id: "cz-708137", name: "Грезля", type: "село", oblast: "Київська", population: null, lat: 51.25493, lon: 29.44652, aliases: ["Hrezlia"] },
+  { id: "cz-707253", name: "Діброва", type: "село", oblast: "Київська", population: null, lat: 51.28333, lon: 29.68333, aliases: ["Dibrova"] },
+  { id: "cz-687085", name: "Жовтневе", type: "село", oblast: "Київська", population: null, lat: 51.20668, lon: 29.33049, aliases: ["Zhovtneve","Святоцкое"] },
+  { id: "cz-687750", name: "Замошня", type: "село", oblast: "Київська", population: null, lat: 51.23577, lon: 29.89841, aliases: ["Zamoshnia"] },
+  { id: "cz-687702", name: "Запілля", type: "село", oblast: "Київська", population: null, lat: 51.25634, lon: 30.11471, aliases: ["Zapillia"] },
+  { id: "cz-686955", name: "Зимовище", type: "село", oblast: "Київська", population: null, lat: 51.42317, lon: 30.18561, aliases: ["Zymovyshche"] },
+  { id: "cz-8392009", name: "Іванівка", type: "село", oblast: "Київська", population: null, lat: 51.2448, lon: 30.25212, aliases: ["Ivanivka"] },
+  { id: "cz-707676", name: "Іловниця", type: "село", oblast: "Київська", population: null, lat: 51.1802, lon: 30.06227, aliases: ["Ilovnytsia"] },
+  { id: "cz-8392011", name: "Кам’янка", type: "село", oblast: "Київська", population: null, lat: 51.17226, lon: 30.24436, aliases: ["Kamianka"] },
+  { id: "cz-705622", name: "Кливини", type: "село", oblast: "Київська", population: null, lat: 51.35708, lon: 29.62459, aliases: ["Klyvyny"] },
+  { id: "cz-704606", name: "Ковшилівка", type: "село", oblast: "Київська", population: null, lat: 51.27028, lon: 29.51116, aliases: ["Kovshylivka"] },
+  { id: "cz-705057", name: "Копачі", type: "село", oblast: "Київська", population: null, lat: 51.35446, lon: 30.1221, aliases: ["Kopachi","Копачи"] },
+  { id: "cz-704936", name: "Корогод", type: "село", oblast: "Київська", population: null, lat: 51.27174, lon: 30.01416, aliases: ["Korohod"] },
+  { id: "cz-704922", name: "Королівка", type: "село", oblast: "Київська", population: null, lat: 51.16658, lon: 29.61159, aliases: ["Korolivka"] },
+  { id: "cz-704799", name: "Кошівка", type: "село", oblast: "Київська", population: null, lat: 51.32052, lon: 30.24039, aliases: ["Koshivka"] },
+  { id: "cz-704185", name: "Красне", type: "село", oblast: "Київська", population: null, lat: 51.4026, lon: 29.75554, aliases: ["Krasne"] },
+  { id: "cz-704048", name: "Крива Гора", type: "село", oblast: "Київська", population: null, lat: 51.38495, lon: 30.19978, aliases: ["Kryva Hora","Кривая Гора"] },
+  { id: "cz-703285", name: "Лелів", type: "село", oblast: "Київська", population: null, lat: 51.3149, lon: 30.17926, aliases: ["Leliv"] },
+  { id: "cz-701755", name: "Мартиновичі", type: "село", oblast: "Київська", population: null, lat: 51.26224, lon: 29.63482, aliases: ["Martynovychi"] },
+  { id: "cz-699830", name: "Нова Красниця", type: "село", oblast: "Київська", population: null, lat: 51.39657, lon: 29.83819, aliases: ["Nova Krasnytsia"] },
+  { id: "cz-706148", name: "Нова Марківка", type: "село", oblast: "Київська", population: null, lat: 51.13585, lon: 29.49098, aliases: ["Nova Markivka"] },
+  { id: "cz-698887", name: "Новий Мир", type: "село", oblast: "Київська", population: null, lat: 51.3366, lon: 29.59888, aliases: ["Novyi Myr"] },
+  { id: "cz-699228", name: "Новосілки", type: "село", oblast: "Київська", population: null, lat: 51.21645, lon: 30.05302, aliases: ["Novosilky"] },
+  { id: "cz-8392010", name: "Плютовище", type: "село", oblast: "Київська", population: null, lat: 51.21744, lon: 30.30437, aliases: ["Pliutovyshche"] },
+  { id: "cz-8390107", name: "Пухове", type: "село", oblast: "Київська", population: null, lat: 51.13285, lon: 29.53827, aliases: ["Pukhove"] },
+  { id: "cz-695705", name: "Річиця", type: "село", oblast: "Київська", population: null, lat: 51.41846, lon: 29.84317, aliases: ["Richytsia"] },
+  { id: "cz-695712", name: "Роз’їждже", type: "село", oblast: "Київська", population: null, lat: 51.28325, lon: 29.90137, aliases: ["Rozizhdzhe"] },
+  { id: "cz-695418", name: "Розсоха", type: "село", oblast: "Київська", population: null, lat: 51.16106, lon: 29.98004, aliases: ["Rozsokha"] },
+  { id: "cz-695145", name: "Рудня-Вересня", type: "село", oblast: "Київська", population: null, lat: 51.18815, lon: 30.10338, aliases: ["Rudnia-Veresnia"] },
+  { id: "cz-8389742", name: "Рудня-Грезлянська", type: "село", oblast: "Київська", population: null, lat: 51.25875, lon: 29.46565, aliases: ["Rudnia-Hrezlianska"] },
+  { id: "cz-695158", name: "Рудня-Осошня", type: "село", oblast: "Житомирська", population: null, lat: 51.15281, lon: 29.34268, aliases: ["Rudnya-Ososhnya"] },
+  { id: "cz-695219", name: "Рудьки", type: "село", oblast: "Київська", population: null, lat: 51.42114, lon: 29.79919, aliases: ["Rudky"] },
+  { id: "cz-692771", name: "Становище", type: "село", oblast: "Київська", population: null, lat: 51.38333, lon: 29.38333, aliases: ["Stanovyshche"] },
+  { id: "cz-692891", name: "Стара Красниця", type: "село", oblast: "Київська", population: null, lat: 51.34619, lon: 29.84665, aliases: ["Stara Krasnytsia"] },
+  { id: "cz-692871", name: "Стара Рудня", type: "село", oblast: "Київська", population: null, lat: 51.33363, lon: 29.6398, aliases: ["Stara Rudnia"] },
+  { id: "cz-692794", name: "Старосілля", type: "село", oblast: "Київська", population: null, lat: 51.35318, lon: 30.20952, aliases: ["Starosillia"] },
+  { id: "cz-8389743", name: "Стеблі", type: "село", oblast: "Київська", population: null, lat: 51.23042, lon: 29.45188, aliases: ["Stebli"] },
+  { id: "cz-692629", name: "Стечанка", type: "село", oblast: "Київська", population: null, lat: 51.30305, lon: 29.92394, aliases: ["Stechanka"] },
+  { id: "cz-691690", name: "Терехів", type: "село", oblast: "Київська", population: null, lat: 51.13305, lon: 30.04516, aliases: ["Terekhiv"] },
+  { id: "cz-691440", name: "Товстий Ліс", type: "село", oblast: "Київська", population: null, lat: 51.38334, lon: 29.80059, aliases: ["Tovstyi Lis"] },
+  { id: "cz-690634", name: "Усів", type: "село", oblast: "Київська", population: null, lat: 51.47592, lon: 30.035, aliases: ["Usiv"] },
+  { id: "cz-8389744", name: "Фабриківка", type: "село", oblast: "Київська", population: null, lat: 51.22902, lon: 29.46325, aliases: ["Fabrykivka"] },
+  { id: "cz-710945", name: "Чапаєвка", type: "село", oblast: "Київська", population: null, lat: 51.42285, lon: 30.32563, aliases: ["Chapaievka"] },
+  { id: "cz-710813", name: "Черевач", type: "село", oblast: "Київська", population: null, lat: 51.21285, lon: 30.13696, aliases: ["Cherevach"] },
+  { id: "cz-710451", name: "Чистогалівка", type: "село", oblast: "Київська", population: null, lat: 51.35996, lon: 30.01382, aliases: ["Chystohalivka"] },
+  { id: "cz-11280511", name: "Чорнобиль-2", type: "селище", oblast: "Київська", population: null, lat: 51.30392, lon: 30.06782, aliases: ["Chornobyl-2","Дуга","Duga"] },
+  { id: "cz-694158", name: "Шевченкове", type: "село", oblast: "Київська", population: null, lat: 51.17692, lon: 29.39913, aliases: ["Shevchenkove"] },
+  { id: "cz-688502", name: "Ямпіль", type: "село", oblast: "Київська", population: null, lat: 51.20775, lon: 30.17503, aliases: ["Yampil"] },
+  { id: "cz-8391716", name: "Янів", type: "село", oblast: "Київська", population: null, lat: 51.37721, lon: 30.01958, aliases: ["Yaniv"] },
+  { id: "cz-688399", name: "Ясен", type: "село", oblast: "Київська", population: null, lat: 51.16623, lon: 29.43851, aliases: ["Yasen"] },
+];

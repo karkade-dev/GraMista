@@ -6,8 +6,9 @@ import { PrismaClient, type Prisma } from '@prisma/client';
 import { parseKatottgCsv, mapSettlements, type ImportSettlement } from '../lib/etl/katottg';
 import { parseGeonames, buildGeoIndex, type GeoEnrich } from '../lib/etl/geonames';
 import { collectGeoForms } from '../lib/etl/vesum';
-import { buildWorldSettlements } from '../lib/etl/worldCities';
+import { buildWorldFromIndex, addAltNameLine, type AltNameIndex } from '../lib/etl/worldCities';
 import { buildCentroidIndex, centroidFor } from '../lib/etl/centroid';
+import { CHORNOBYL_ZONE } from './seed-chornobyl';
 import { normalize } from '../lib/text';
 
 // Імпорт повного довідника НП (КАТОТТГ + GeoNames + ВЕСУМ) у Settlement/SettlementAlias.
@@ -55,7 +56,12 @@ async function main(): Promise<void> {
     },
   });
   const byKatottg = new Map(existing.filter((e) => e.katottg).map((e) => [e.katottg as string, e] as const));
-  const legacyByKey = new Map(existing.filter((e) => !e.katottg).map((e) => [`${e.nameNorm}|${e.oblast ?? ''}`, e] as const));
+  // legacy-зіставлення — лише для 27 курованих seed-слагів (kyiv, lviv…). НП зони ЧАЕС (id 'cz-…')
+  // сюди НЕ беремо: інакше живий КАТОТТГ-тезка в тій же області (напр. Іллінці) злився б у наш
+  // покинутий зонний НП замість створити власний рядок. Зону веде окремий крок нижче.
+  const legacyByKey = new Map(
+    existing.filter((e) => !e.katottg && !e.id.startsWith('cz-')).map((e) => [`${e.nameNorm}|${e.oblast ?? ''}`, e] as const),
+  );
 
   // Серед CSV-тезок на один legacy-ключ обираємо «місто» (обласні центри — завжди міста).
   const bestForLegacy = new Map<string, ImportSettlement>();
@@ -118,7 +124,12 @@ async function main(): Promise<void> {
   const altPath = join(SRC, 'alternateNamesV2.txt');
   const worldAliasRows: Prisma.SettlementAliasCreateManyInput[] = [];
   if (existsSync(citiesPath) && existsSync(altPath)) {
-    const world = buildWorldSettlements(readFileSync(citiesPath, 'utf8'), readFileSync(altPath, 'utf8'));
+    // alternateNamesV2 (~740 МБ) перевищує ліміт рядка JS (~512 МБ) — стрімимо рядково (як ВЕСУМ);
+    // cities15000 (~8 МБ) читаємо цілим. Інакше readFileSync падає з ERR_STRING_TOO_LONG.
+    const altIdx: AltNameIndex = new Map();
+    const altRl = createInterface({ input: createReadStream(altPath, { encoding: 'utf8' }), crlfDelay: Infinity });
+    for await (const line of altRl) addAltNameLine(altIdx, line);
+    const world = buildWorldFromIndex(readFileSync(citiesPath, 'utf8'), altIdx);
     const existingWorld = new Set(
       (await prisma.settlement.findMany({ where: { id: { startsWith: 'g' } }, select: { id: true } })).map((s) => s.id),
     );
@@ -140,6 +151,16 @@ async function main(): Promise<void> {
   } else {
     console.warn('[import] cities15000.txt/alternateNamesV2.txt не знайдено — без закордонних міст');
   }
+
+  // НП Чорнобильської зони (Прип'ять/Чорнобиль/Дуга + покинуті села): КАТОТТГ не дає їх на рівні 4,
+  // тож сідаємо з курованого списку (prisma/seed-chornobyl). Ідемпотентно за id; coordsDerived лишаємо
+  // false (реальні координати GeoNames) → центроїд їх не чіпає. Робимо ДО побудови idsByNameNorm нижче,
+  // щоб ВЕСУМ-крок дочепив їм відмінки. Аліаси (source='seed') додаємо в загальний пакет нижче.
+  for (const z of CHORNOBYL_ZONE) {
+    const data = { name: z.name, nameNorm: normalize(z.name), type: z.type, oblast: z.oblast, population: z.population, lat: z.lat, lon: z.lon, country: 'UA' };
+    await prisma.settlement.upsert({ where: { id: z.id }, update: data, create: { id: z.id, ...data } });
+  }
+  console.log(`[import] зона ЧАЕС: ${CHORNOBYL_ZONE.length} НП`);
 
   // Центроїд громади для НП БЕЗ власних координат (нема в GeoNames або тезки без лідера).
   // Опори — лише СПРАВЖНІ точки (coordsDerived=false), щоб центроїди не дрейфували від себе.
@@ -218,6 +239,10 @@ async function main(): Promise<void> {
     if (!enrich) continue;
     for (const a of enrich.aliasCandidates) pushAlias(s.id, a, 'geonames');
   }
+
+  // Аліаси НП зони ЧАЕС (латиниця / історичні назви / «Дуга» для Чорнобиль-2). source='seed' —
+  // наступні реімпорти чистять лише vesum/geonames/geonames-world, тож ці лишаються; дедуп через taken.
+  for (const z of CHORNOBYL_ZONE) for (const a of z.aliases) pushAlias(z.id, a, 'seed');
 
   // Аліаси іноземних НП (geonames-world) — додаємо до спільного пакету.
   for (const row of worldAliasRows) aliasRows.push(row);

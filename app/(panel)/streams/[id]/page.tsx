@@ -7,6 +7,7 @@ import { listCollectionOptions } from '@/lib/collections';
 import { formatUah, formatPoints, formatDateTime, formatDuration, pluralBaliv } from '@/lib/format';
 import { ConfirmSubmit } from '@/app/ConfirmSubmit';
 import { CopyButton } from '@/app/CopyButton';
+import { ReportExport } from './ReportExport';
 import { updateStreamAction, deleteStreamAction } from '../actions';
 import type { Metadata } from 'next';
 
@@ -115,7 +116,7 @@ export default async function StreamDetail({ params }: { params: Promise<{ id: s
           </div>
 
           {/* Редагування */}
-          <div className="stream-col">
+          <div className="stream-col stream-side">
             <div className="col-title">✏️ Редагувати</div>
             <form action={updateStreamAction} className="edit-form">
               <input type="hidden" name="id" value={s.id} />
@@ -186,10 +187,8 @@ export default async function StreamDetail({ params }: { params: Promise<{ id: s
               <pre className="report-text">{report}</pre>
               <div className="report-actions">
                 <CopyButton text={report} label="Копіювати звіт" />
-                <a href={`/streams/${s.id}/report-image`} target="_blank" rel="noopener" className="btn-img">
-                  🖼 Картинка звіту
-                </a>
               </div>
+              <ReportExport basePath={`/streams/${s.id}/report-image`} />
             </div>
 
             <form action={deleteStreamAction} className="delete-form">

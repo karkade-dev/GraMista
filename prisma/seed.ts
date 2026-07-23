@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { SETTLEMENTS } from './seed-settlements';
+import { CHORNOBYL_ZONE } from './seed-chornobyl';
 import { normalize } from '../lib/text';
 import { DEFAULT_USER_ID } from '../lib/tenant';
 
@@ -24,7 +25,9 @@ async function main(): Promise<void> {
   let settlements = 0;
   let aliases = 0;
 
-  for (const s of SETTLEMENTS) {
+  // Базовий довідник + НП Чорнобильської зони (Прип'ять/Чорнобиль/Дуга + покинуті села) — у тестову БД
+  // потрапляє лише через seed, тож зону додаємо й тут (на проді її ставить db:import тим самим списком).
+  for (const s of [...SETTLEMENTS, ...CHORNOBYL_ZONE]) {
     // id лишаємо людський (slug із seed-довідника) — стабільний, спрощує імпорт state.json (Крок 3).
     await prisma.settlement.upsert({
       where: { id: s.id },
