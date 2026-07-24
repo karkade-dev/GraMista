@@ -53,15 +53,15 @@ async function build(db: PrismaClient, window: GlobalWindow): Promise<GlobalMapD
   const gte = windowGte(window);
 
   const [totalAgg, recAll, recWin, settlementsTotal, feedRows, users, donAgg, liveRows, setting] = await Promise.all([
-    db.donation.aggregate({ where: { user: PARTICIPANT }, _sum: { amount: true } }),
-    db.donation.groupBy({ by: ['settlementId'], where: { status: 'recognized', settlementId: { not: null }, user: PARTICIPANT, settlement: { is: { country: 'UA' } } }, _sum: { amount: true } }),
+    db.donation.aggregate({ where: { user: PARTICIPANT, outOfGame: false }, _sum: { amount: true } }),
+    db.donation.groupBy({ by: ['settlementId'], where: { status: 'recognized', settlementId: { not: null }, user: PARTICIPANT, outOfGame: false, settlement: { is: { country: 'UA' } } }, _sum: { amount: true } }),
     gte
-      ? db.donation.groupBy({ by: ['settlementId'], where: { status: 'recognized', settlementId: { not: null }, user: PARTICIPANT, createdAt: { gte }, settlement: { is: { country: 'UA' } } }, _sum: { amount: true } })
+      ? db.donation.groupBy({ by: ['settlementId'], where: { status: 'recognized', settlementId: { not: null }, user: PARTICIPANT, outOfGame: false, createdAt: { gte }, settlement: { is: { country: 'UA' } } }, _sum: { amount: true } })
       : null,
     db.settlement.count({ where: { country: 'UA' } }),
-    db.donation.findMany({ where: { status: 'recognized', user: PARTICIPANT, settlement: { is: { country: 'UA' } } }, orderBy: { createdAt: 'desc' }, take: 12, select: { externalId: true, donorName: true, amount: true, createdAt: true, settlement: { select: { name: true } } } }),
+    db.donation.findMany({ where: { status: 'recognized', user: PARTICIPANT, outOfGame: false, settlement: { is: { country: 'UA' } } }, orderBy: { createdAt: 'desc' }, take: 12, select: { externalId: true, donorName: true, amount: true, createdAt: true, settlement: { select: { name: true } } } }),
     db.user.findMany({ where: { showOnGlobalMap: true, hiddenFromGlobalMap: false, handle: { not: null } }, select: { id: true, name: true, handle: true } }),
-    db.donation.groupBy({ by: ['userId'], where: { user: PARTICIPANT }, _sum: { amount: true }, _max: { createdAt: true } }),
+    db.donation.groupBy({ by: ['userId'], where: { user: PARTICIPANT, outOfGame: false }, _sum: { amount: true }, _max: { createdAt: true } }),
     db.stream.findMany({ where: { endedAt: null, user: { showOnGlobalMap: true, hiddenFromGlobalMap: false, handle: { not: null } } }, select: { name: true, url: true, user: { select: { name: true, handle: true } } } }),
     db.appSetting.findUnique({ where: { id: 'app' }, include: { featuredCollection: { include: { user: true } } } }),
   ]);
@@ -158,9 +158,9 @@ export async function globalCityDetail(db: PrismaClient, settlementId: string): 
   if (!s) return null;
 
   const [totalAgg, byUser, recentRows] = await Promise.all([
-    db.donation.aggregate({ where: { settlementId, status: 'recognized', user: PARTICIPANT, settlement: { is: { country: 'UA' } } }, _sum: { amount: true } }),
-    db.donation.groupBy({ by: ['userId'], where: { settlementId, status: 'recognized', user: PARTICIPANT, settlement: { is: { country: 'UA' } } }, _sum: { amount: true } }),
-    db.donation.findMany({ where: { settlementId, status: 'recognized', user: PARTICIPANT, settlement: { is: { country: 'UA' } } }, orderBy: { createdAt: 'desc' }, take: 5, select: { donorName: true, amount: true, createdAt: true } }),
+    db.donation.aggregate({ where: { settlementId, status: 'recognized', user: PARTICIPANT, outOfGame: false, settlement: { is: { country: 'UA' } } }, _sum: { amount: true } }),
+    db.donation.groupBy({ by: ['userId'], where: { settlementId, status: 'recognized', user: PARTICIPANT, outOfGame: false, settlement: { is: { country: 'UA' } } }, _sum: { amount: true } }),
+    db.donation.findMany({ where: { settlementId, status: 'recognized', user: PARTICIPANT, outOfGame: false, settlement: { is: { country: 'UA' } } }, orderBy: { createdAt: 'desc' }, take: 5, select: { donorName: true, amount: true, createdAt: true } }),
   ]);
   if (byUser.length === 0) return null;
 

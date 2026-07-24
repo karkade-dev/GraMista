@@ -43,6 +43,7 @@ model User {
   monobankJarUrl String?
   twitchUrl      String?
   youtubeUrl     String?
+  telegramUrl    String?
   // Показувати «минулі стріми» на публічній сторінці /<handle> (§18; стрімер може сховати).
   publicShowStreams Boolean @default(true)
   // Роль рівня сервісу: 'user' | 'admin'. Призначається ТІЛЬКИ вручну в БД —
@@ -83,6 +84,7 @@ model User {
   streams      Stream[]
   collections  Collection[]
   adminActions AdminAction[]
+  settlementAliases SettlementAlias[]
   // 2FA (плагін Better Auth twoFactor): чи увімкнено + таблиця секретів/backup-кодів.
   twoFactorEnabled Boolean?    @default(false)
   twoFactors       TwoFactor[]
@@ -203,9 +205,15 @@ model SettlementAlias {
   alias        String
   aliasNorm    String
   source       String? // 'declension' | 'translit' | 'manual' | ...
+  // Власник ручного синоніма (мультитенант): null = системний/курований аліас (GeoNames/ВЕСУМ/
+  // seed — спільний для всіх стрімерів); заповнений = приватний синонім стрімера, видимий лише в
+  // його розпізнаванні та пошуку — дія одного стрімера не впливає на інших (див. spec 2026-06-15).
+  userId       String?
+  user         User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([settlementId])
   @@index([aliasNorm])
+  @@index([userId])
   @@index([aliasNorm(ops: raw("gin_trgm_ops"))], type: Gin, map: "SettlementAlias_aliasNorm_trgm")
 }
 
@@ -228,6 +236,10 @@ model Donation {
   collection    Collection?     @relation(fields: [collectionId], references: [id], onDelete: SetNull)
   status        DonationStatus  @default(unrecognized)
   pointsAwarded Decimal         @default(0) @db.Decimal(14, 4)
+  // Донат «поза грою»: балів місту не дає й схований від глядачів (стрічка/мапа/алерт/суми).
+  // Ставить глобальна «битва міст» (на інжесті: !cityBattle) або ручна дія оператора (в обидва боки).
+  // Інваріант: outOfGame=true ⟹ pointsAwarded=0.
+  outOfGame     Boolean         @default(false)
   createdAt     DateTime        @default(now()) // час донату
 
   pointEvents PointEvent[]

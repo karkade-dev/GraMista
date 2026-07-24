@@ -7,7 +7,8 @@ export interface LeaderRow {
 }
 
 export interface LbFilter {
-  limit?: number;
+  /** null — без обмеження (повний список міст); за замовчуванням 20. */
+  limit?: number | null;
   /** включно: подія createdAt >= from */
   from?: Date;
   /** виключно: подія createdAt < to */
@@ -51,6 +52,14 @@ export async function leaderboard(
     name: nameById.get(g.settlementId) ?? g.settlementId,
     points: (g._sum.points ?? new Prisma.Decimal(0)).toNumber(),
   }));
-  rows.sort((a, b) => (asc ? a.points - b.points : b.points - a.points));
-  return rows.slice(0, limit);
+  // Порядок при рівних балах мусить бути стабільним: groupBy повертає групи невпорядковано,
+  // тож без детермінованого тай-брейку той самий стан давав би різний ранг на картинці-звіті,
+  // у тексті й на оверлеї. Спершу за назвою (укр. локаль), далі за settlementId.
+  rows.sort((a, b) => {
+    const byPoints = asc ? a.points - b.points : b.points - a.points;
+    if (byPoints !== 0) return byPoints;
+    const byName = a.name.localeCompare(b.name, 'uk');
+    return byName !== 0 ? byName : a.settlementId.localeCompare(b.settlementId);
+  });
+  return limit == null ? rows : rows.slice(0, limit);
 }

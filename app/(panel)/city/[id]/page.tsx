@@ -23,7 +23,7 @@ export default async function CityDetailPage({ params }: { params: Promise<{ id:
   const { id } = await params;
   // Картка міста — у рамці поточного змагання (активний збір), як дашборд/публічна; нема збору → весь час.
   const col = await prisma.collection.findFirst({ where: { userId: U, status: 'active' }, select: { id: true } });
-  const c = await cityDetail(prisma, U, id, {}, { collectionId: col?.id });
+  const c = await cityDetail(prisma, U, id, {}, { collectionId: col?.id, allRecent: true });
   if (!c) notFound();
 
   return (
@@ -57,10 +57,10 @@ export default async function CityDetailPage({ params }: { params: Promise<{ id:
         </div>
 
         <div className="stream-grid">
-          {/* Останні донати міста */}
+          {/* Усі донати міста — повна історія (у рамці активного збору) */}
           <div className="stream-col">
-            <div className="col-title">💛 Останні донати</div>
-            <div className="feed scroll">
+            <div className="col-title">💛 Усі донати</div>
+            <div className="feed scroll city-feed">
               {c.recent.length === 0 ? (
                 <div className="empty">У цьому місті ще немає донатів.</div>
               ) : (

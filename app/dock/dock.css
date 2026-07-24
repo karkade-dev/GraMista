@@ -5,9 +5,15 @@ body:has(.dock-root) { background: #1B1714; margin: 0; }
 .dock-root {
   --bg:#1B1714; --card:#241E19; --card2:#2B231D; --ink:#F3E9DF; --ink2:#CDBCAB; --ink3:#9A8979;
   --accent:#D0875A; --gold:#E0B66B; --line:#3A2F26; --pot:#8C9A6B; --money:#A9C77E;
-  min-height:100vh; background:var(--bg); color:var(--ink);
+  /* Скролимо сам .dock-root: globals.css тримає body { overflow:hidden }, а перекриття через
+     body:has(...) (як у лендинга) не спрацює в старих CEF OBS-доків (:has — з Chromium 105).
+     Масштаб A−/A+ застосовується до внутрішнього .dk, щоб не чіпати скрол-контейнер. */
+  height:100vh; overflow-y:auto; background:var(--bg); color:var(--ink);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size:13px;
 }
+.dock-root::-webkit-scrollbar { width: 9px; }
+.dock-root::-webkit-scrollbar-track { background: transparent; }
+.dock-root::-webkit-scrollbar-thumb { background: var(--line); border-radius: 99px; border: 2px solid var(--bg); }
 .dock-root .dk { display:flex; flex-direction:column; min-height:100vh; }
 .dock-root .dk-bar { display:flex; align-items:center; gap:8px; padding:10px 13px;
   background:var(--card2); border-bottom:1px solid var(--line); font-weight:700; position:sticky; top:0; z-index:2; }

@@ -85,11 +85,12 @@ test('журнал: undo adjustPoints прибирає нараховані ба
 test('журнал: undo addAlias прибирає синонім (searchSettlements більше не бачить)', async () => {
   const res = await addAlias(testDb, U, 'kyiv', 'Мегаполіс');
   assert.ok(res?.ok);
-  assert.ok((await searchSettlements(testDb, 'мегаполіс')).some((s) => s.id === 'kyiv'));
+  // Приватний синонім — у пошуку власника (мультитенант): передаємо U.
+  assert.ok((await searchSettlements(testDb, 'мегаполіс', 8, U)).some((s) => s.id === 'kyiv'));
 
   const undo = await undoAdminAction(testDb, U, await lastActionId());
   assert.deepEqual(undo, { ok: true });
-  assert.deepEqual(await searchSettlements(testDb, 'мегаполіс'), []); // аліас зник
+  assert.deepEqual(await searchSettlements(testDb, 'мегаполіс', 8, U), []); // аліас зник
 });
 
 test('журнал: assignCityBulk пише ОДИН запис; undo повертає всі донати в нерозпізнані', async () => {

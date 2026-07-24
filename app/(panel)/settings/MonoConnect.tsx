@@ -6,7 +6,7 @@ const EMPTY: MonoConnectState = {};
 
 export function MonoConnect({ connected, title }: { connected: boolean; title: string | null }) {
   const [token, setToken] = useState('');
-  const [jar, setJar] = useState<{ id: string; title: string } | null>(null);
+  const [jar, setJar] = useState<{ id: string; sendId: string; title: string } | null>(null);
   const [listState, listJars, listing] = useActionState(listMonoJarsAction, EMPTY);
   const [connectState, connectJar, connecting] = useActionState(connectMonoJarAction, EMPTY);
 
@@ -48,6 +48,7 @@ export function MonoConnect({ connected, title }: { connected: boolean; title: s
         <form action={connectJar}>
           <input type="hidden" name="token" value={token} />
           <input type="hidden" name="jarId" value={jar?.id ?? ''} />
+          <input type="hidden" name="sendId" value={jar?.sendId ?? ''} />
           <input type="hidden" name="jarTitle" value={jar?.title ?? ''} />
           <div className="set-group">
             {listState.jars.map((j) => (

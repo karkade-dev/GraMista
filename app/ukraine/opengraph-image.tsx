@@ -2,6 +2,7 @@ import { ImageResponse } from 'next/og';
 import { prisma } from '@/lib/db';
 import { getGlobalMap } from '@/lib/globalMap';
 import { ogFonts } from '@/app/og/reportImage';
+import { mapBackground } from '@/app/og/mapBackground';
 import { formatUah } from '@/lib/format';
 
 // Прев'ю-картка посилання /ukraine для Telegram/Discord/Twitter (next/og, як картинки-звітів).
@@ -29,7 +30,10 @@ export default async function OgImage() {
           flexDirection: 'column',
           justifyContent: 'space-between',
           padding: 64,
-          background: '#1B1714',
+          backgroundColor: '#1B1714',
+          backgroundImage: mapBackground(data.litCities),
+          backgroundSize: '100% 100%',
+          backgroundRepeat: 'no-repeat',
           color: '#F3E9DF',
           fontFamily: 'Onest',
         }}

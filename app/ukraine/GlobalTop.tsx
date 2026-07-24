@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { formatUah } from '@/lib/format';
+import { formatUahWhole } from '@/lib/format';
 import type { GlobalTopRow, GlobalWindow } from '@/lib/globalMap';
 import { openCity } from './openCity';
 
@@ -35,7 +35,7 @@ export function GlobalTop({ all, month, week }: { all: GlobalTopRow[]; month: Gl
             <button key={r.settlementId} type="button" className="ukr-trow" onClick={() => openCity(r.settlementId)}>
               <span className="medal">{MEDALS[i] ?? i + 1}</span>
               <span className="nm">{r.name}</span>
-              <span className="uah">{formatUah(r.sumUah)}</span>
+              <span className="uah">{formatUahWhole(r.sumUah)}</span>
             </button>
           ))
         )}

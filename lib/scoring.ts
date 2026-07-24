@@ -84,8 +84,8 @@ export async function creditPool(
  * відняти один донат із середини ланцюга, що вже флашився, інакше не можна.
  *
  * Адмін-події (`source='admin'`, `donationId=null`) НЕ чіпаються. Виконується ВСЕРЕДИНІ транзакції.
- * Інваріант: розпізнаний донат брав участь у нарахуванні — істина, коли «битва міст» увімкнена
- * (єдиний сценарій, де міста змагаються); так само, як assignCity, дія адміна завжди нараховує.
+ * Інваріант: у нарахуванні бере участь розпізнаний донат У ГРІ (`outOfGame: false`) — виключення
+ * липке, тож розпізнаний-але-виключений донат (зокрема після assignCity) через creditPool не йшов.
  */
 export async function recomputeDonorCityChain(
   tx: Tx,
@@ -109,7 +109,7 @@ export async function recomputeDonorCityChain(
   });
 
   const chain = await tx.donation.findMany({
-    where: { userId, donorName: donorKey, settlementId, collectionId, status: 'recognized' },
+    where: { userId, donorName: donorKey, settlementId, collectionId, status: 'recognized', outOfGame: false },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
   });
   if (chain.length > 0) {
@@ -155,7 +155,8 @@ export async function applyDonation(
       await tx.donation.create({
         data: {
           userId, externalId: d.externalId, donorName: d.donorName, amount,
-          message: d.message, sourceId: d.sourceId ?? null, streamId, collectionId, status: 'unrecognized',
+          message: d.message, sourceId: d.sourceId ?? null, streamId, collectionId,
+          status: 'unrecognized', outOfGame: !awardPoints,
         },
       });
       return { matched: false, pointsAwarded: 0, pendingUah: 0 };
@@ -164,7 +165,8 @@ export async function applyDonation(
     const donation = await tx.donation.create({
       data: {
         userId, externalId: d.externalId, donorName: d.donorName, amount,
-        message: d.message, sourceId: d.sourceId ?? null, settlementId, streamId, collectionId, status: 'recognized',
+        message: d.message, sourceId: d.sourceId ?? null, settlementId, streamId, collectionId,
+        status: 'recognized', outOfGame: !awardPoints,
       },
     });
 

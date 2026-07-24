@@ -16,7 +16,7 @@ export default async function SettingsPage() {
   const U = await requireUserId();
   const user = await prisma.user.findUnique({
     where: { id: U },
-    select: { handle: true, monobankJarUrl: true, twitchUrl: true, youtubeUrl: true, publicShowStreams: true, showOnGlobalMap: true, abroadCities: true, abroadWorldMap: true, abroadTopMode: true, abroadHideAggressor: true, twoFactorEnabled: true, commentMode: true, bannedWordsAdded: true, bannedWordsAllowed: true, showCommentPublic: true },
+    select: { handle: true, monobankJarUrl: true, twitchUrl: true, youtubeUrl: true, telegramUrl: true, publicShowStreams: true, showOnGlobalMap: true, abroadCities: true, abroadWorldMap: true, abroadTopMode: true, abroadHideAggressor: true, twoFactorEnabled: true, commentMode: true, bannedWordsAdded: true, bannedWordsAllowed: true, showCommentPublic: true },
   });
   const mode = toCommentMode(user?.commentMode);
   const wordLists = wordListsForUi(user?.bannedWordsAdded ?? '', user?.bannedWordsAllowed ?? '');
@@ -41,6 +41,22 @@ export default async function SettingsPage() {
         <MonoConnect connected={connected} title={source?.title ?? null} />
         {connected && source?.lastEventAt && (
           <small>Остання подія від банку: {source.lastEventAt.toLocaleString('uk-UA')}</small>
+        )}
+        {user?.monobankJarUrl && (
+          <div className="set-line">
+            <span className="lbl-row">
+              Посилання на банку
+              <Hint>
+                Береться автоматично з підключеної банки monobank — окремо вписувати не треба.
+                Щоб змінити, підключіть іншу банку вище. Глядачі бачать на публічній сторінці
+                кнопку «Задонатити» і QR-код, що ведуть сюди.
+              </Hint>
+            </span>
+            <p className="pub-link">
+              <a href={user.monobankJarUrl} target="_blank" rel="noreferrer">{user.monobankJarUrl}</a>
+              <CopyButton text={user.monobankJarUrl} label="Копіювати" />
+            </p>
+          </div>
         )}
         {connected && (
           <form action={disconnectMonoAction}>
@@ -69,16 +85,6 @@ export default async function SettingsPage() {
           </label>
           <label>
             <span className="lbl-row">
-              Банка monobank
-              <Hint>
-                Посилання на вашу банку (send.monobank.ua/jar/…). Глядачі побачать на публічній
-                сторінці кнопку «Задонатити» і QR-код, що ведуть на неї.
-              </Hint>
-            </span>
-            <input name="monobankJarUrl" defaultValue={user?.monobankJarUrl ?? ''} placeholder="https://send.monobank.ua/jar/..." />
-          </label>
-          <label>
-            <span className="lbl-row">
               Twitch
               <Hint>Кнопка «Twitch» у шапці публічної сторінки — щоб глядачі перейшли на ваш канал.</Hint>
             </span>
@@ -90,6 +96,13 @@ export default async function SettingsPage() {
               <Hint>Кнопка «YouTube» у шапці публічної сторінки — щоб глядачі перейшли на ваш канал.</Hint>
             </span>
             <input name="youtubeUrl" defaultValue={user?.youtubeUrl ?? ''} placeholder="https://youtube.com/@..." />
+          </label>
+          <label>
+            <span className="lbl-row">
+              Telegram
+              <Hint>Кнопка «Telegram» у шапці публічної сторінки — посилання на ваш канал або групу.</Hint>
+            </span>
+            <input name="telegramUrl" defaultValue={user?.telegramUrl ?? ''} placeholder="https://t.me/..." />
           </label>
           <div className="set-line">
             <label className="set-row">
@@ -133,7 +146,7 @@ export default async function SettingsPage() {
               лишається суто українською, закордон видно лише у списку топу.
             </Hint>
           </div>
-          <div className="set-line">
+          <div className="set-group">
             <span className="lbl-row">Топ закордонних міст</span>
             <label className="set-row">
               <input type="radio" name="abroadTopMode" value="separate" defaultChecked={(user?.abroadTopMode ?? 'separate') !== 'shared'} />

@@ -10,6 +10,16 @@ export function formatUah(n: number): string {
   return frac === '00' ? `${grouped}${THIN}₴` : `${grouped},${frac}${THIN}₴`;
 }
 
+/**
+ * Ціла гривня для агрегованих підсумків/лідербордів: «31 572 ₴», завжди без копійок.
+ * Копійки в сумах — шум, який ламає вирівнювання колонки (одні рядки з копійками, інші без).
+ * Для окремих донатів (де копійки бувають значущі) лишається formatUah.
+ */
+export function formatUahWhole(n: number): string {
+  const int = Math.round(n).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, THIN);
+  return `${int}${THIN}₴`;
+}
+
 /** Бали: до 1 знака після коми, без зайвого нуля (12.5 → «12.5», 3 → «3»). */
 export function formatPoints(n: number): string {
   const rounded = Math.round(n * 10) / 10;

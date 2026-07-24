@@ -17,8 +17,10 @@ import { ensureDockKey } from '@/lib/publicUser';
 import { OpenDockButton } from '@/app/OpenDockButton';
 import { CityAutocomplete } from '@/app/CityAutocomplete';
 import { ReassignCityCell } from '@/app/ReassignCityCell';
+import { DonationGameToggle } from '@/app/DonationGameToggle';
+import { TeachableComment } from '@/app/TeachableComment';
 import { StreamPicker } from '@/app/StreamPicker';
-import { assignCityAction, reassignCityAction } from '@/app/(panel)/admin/actions';
+import { assignCityAction, reassignCityAction, rememberSpellingAction, setDonationGameAction } from '@/app/(panel)/admin/actions';
 import { moveDonationAction } from './actions';
 
 export const dynamic = 'force-dynamic';
@@ -95,7 +97,7 @@ export default async function DonationsPage({ searchParams }: { searchParams: Pr
             type="text"
             name="q"
             defaultValue={sp.q ?? ''}
-            placeholder="Пошук за донатером…"
+            placeholder="Пошук: донатер або фраза донату…"
             className="fld grow"
             maxLength={120}
           />
@@ -195,23 +197,31 @@ export default async function DonationsPage({ searchParams }: { searchParams: Pr
                     </td>
                     <td className="num sum">+{formatUah(d.amountUah)}</td>
                     <td>
-                      {d.city ? (
-                        <ReassignCityCell
-                          key={d.city}
-                          externalId={d.externalId}
-                          city={d.city}
-                          action={reassignCityAction}
-                        />
-                      ) : (
-                        <div className="inline-assign">
-                          <CityAutocomplete
-                            action={assignCityAction}
-                            hidden={{ externalId: d.externalId }}
-                            placeholder="призначити місто…"
-                            autoSubmit
+                      <div className="city-cell">
+                        {d.city ? (
+                          <ReassignCityCell
+                            key={d.city}
+                            externalId={d.externalId}
+                            city={d.city}
+                            action={reassignCityAction}
                           />
-                        </div>
-                      )}
+                        ) : (
+                          <div className="inline-assign">
+                            <CityAutocomplete
+                              action={assignCityAction}
+                              hidden={{ externalId: d.externalId }}
+                              placeholder="призначити місто…"
+                              autoSubmit
+                            />
+                          </div>
+                        )}
+                        <DonationGameToggle
+                          externalId={d.externalId}
+                          outOfGame={d.outOfGame}
+                          hasCity={Boolean(d.city)}
+                          action={setDonationGameAction}
+                        />
+                      </div>
                     </td>
                     <td>
                       {/* key ремонтить пікер на серверне значення після збереження: без нього
@@ -226,7 +236,9 @@ export default async function DonationsPage({ searchParams }: { searchParams: Pr
                       />
                     </td>
                     <td className="num">
-                      {d.points > 0 ? (
+                      {d.outOfGame ? (
+                        <span className="oog-badge">поза грою</span>
+                      ) : d.points > 0 ? (
                         <span className="pts-add">+{formatPoints(d.points)}</span>
                       ) : d.city ? (
                         <span className="pts-pot" title="у скарбничку міста">
@@ -236,7 +248,18 @@ export default async function DonationsPage({ searchParams }: { searchParams: Pr
                         <span className="pts-zero">—</span>
                       )}
                     </td>
-                    <td className="msg">{d.message || <span className="pts-zero">—</span>}</td>
+                    <td className="msg">
+                      {d.message ? (
+                        <TeachableComment
+                          comment={d.message}
+                          settlementId={d.settlementId}
+                          city={d.city}
+                          action={rememberSpellingAction}
+                        />
+                      ) : (
+                        <span className="pts-zero">—</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

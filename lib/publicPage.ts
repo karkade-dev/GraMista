@@ -12,6 +12,7 @@ export interface PublicProfile {
   handle: string;
   twitchUrl: string | null;
   youtubeUrl: string | null;
+  telegramUrl: string | null;
   monobankJarUrl: string | null;
   publicShowStreams: boolean;
   /** Показувати коментарі донатів у стрічці публічної сторінки. */
@@ -92,7 +93,7 @@ export async function getPublicPage(db: PrismaClient, handle: string): Promise<P
   if (!userId) return null;
   const user = await db.user.findUnique({
     where: { id: userId },
-    select: { name: true, handle: true, twitchUrl: true, youtubeUrl: true, monobankJarUrl: true, publicShowStreams: true, showCommentPublic: true, abroadCities: true, abroadTopMode: true },
+    select: { name: true, handle: true, twitchUrl: true, youtubeUrl: true, telegramUrl: true, monobankJarUrl: true, publicShowStreams: true, showCommentPublic: true, abroadCities: true, abroadTopMode: true },
   });
   if (!user?.handle) return null;
 
@@ -113,17 +114,17 @@ export async function getPublicPage(db: PrismaClient, handle: string): Promise<P
   const colId = openCol?.id;
 
   const [state, fullLeaderboard, fullAbroad, allTimeAgg, todayAgg, todayLeaderRows, streams, pastCols] = await Promise.all([
-    getState(db, userId, {}, colId ? { collectionId: colId } : {}),
-    // Ліміт «всі міста з балами»: міст України < 100к — фактично без обрізання.
+    getState(db, userId, {}, colId ? { collectionId: colId, audience: 'viewer' } : { audience: 'viewer' }),
+    // Усі міста з балами, без обрізання.
     // shared → один список (UA+світ); off/separate → основний лише UA.
-    leaderboard(db, userId, { limit: 100_000, country: abroadMode === 'shared' ? undefined : 'ua', ...(colId ? { collectionId: colId } : {}) }),
+    leaderboard(db, userId, { limit: null, country: abroadMode === 'shared' ? undefined : 'ua', ...(colId ? { collectionId: colId } : {}) }),
     // Окремий повний топ закордонних міст — лише в режимі 'separate'.
     abroadMode === 'separate'
-      ? leaderboard(db, userId, { limit: 100_000, country: 'abroad', ...(colId ? { collectionId: colId } : {}) })
+      ? leaderboard(db, userId, { limit: null, country: 'abroad', ...(colId ? { collectionId: colId } : {}) })
       : Promise.resolve(undefined),
-    db.donation.aggregate({ where: { userId }, _sum: { amount: true } }),
+    db.donation.aggregate({ where: { userId, outOfGame: false }, _sum: { amount: true } }),
     db.donation.aggregate({
-      where: { userId, createdAt: { gte: startOfDay } },
+      where: { userId, createdAt: { gte: startOfDay }, outOfGame: false },
       _sum: { amount: true },
       _max: { amount: true },
     }),
@@ -142,7 +143,7 @@ export async function getPublicPage(db: PrismaClient, handle: string): Promise<P
   const pastSums = pastIds.length
     ? await db.donation.groupBy({
         by: ['collectionId'],
-        where: { userId, collectionId: { in: pastIds } },
+        where: { userId, collectionId: { in: pastIds }, outOfGame: false },
         _sum: { amount: true },
       })
     : [];
@@ -162,6 +163,7 @@ export async function getPublicPage(db: PrismaClient, handle: string): Promise<P
       handle: user.handle,
       twitchUrl: user.twitchUrl,
       youtubeUrl: user.youtubeUrl,
+      telegramUrl: user.telegramUrl,
       monobankJarUrl: user.monobankJarUrl,
       publicShowStreams: user.publicShowStreams,
       showCommentPublic: user.showCommentPublic,
@@ -231,8 +233,8 @@ export async function getPublicCollectionArchive(
   if (!c) return null;
   const user = await db.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true, handle: true } });
   const [agg, cities, streams] = await Promise.all([
-    db.donation.aggregate({ where: { userId, collectionId: c.id }, _sum: { amount: true }, _count: true }),
-    leaderboard(db, userId, { collectionId: c.id, limit: 100_000 }),
+    db.donation.aggregate({ where: { userId, collectionId: c.id, outOfGame: false }, _sum: { amount: true }, _count: true }),
+    leaderboard(db, userId, { collectionId: c.id, limit: null }),
     db.stream.findMany({
       where: { userId, collectionId: c.id },
       select: { id: true, name: true, startedAt: true, url: true },

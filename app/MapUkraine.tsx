@@ -15,7 +15,7 @@ import type {
   ExpressionSpecification,
 } from 'maplibre-gl';
 import type { MapPoint, DonationFlash } from '@/lib/map';
-import { formatUah, formatPoints, pluralBaliv } from '@/lib/format';
+import { formatUah, formatUahWhole, formatPoints, pluralBaliv } from '@/lib/format';
 
 // Неймспейс maplibre-gl (іменований експорт Marker — для маркера спалаху).
 type MaplibreModule = typeof import('maplibre-gl');
@@ -124,6 +124,11 @@ const CITY_LABEL_PAINT: SymbolLayerSpecification['paint'] = {
   'text-halo-width': 1.3,
 };
 
+// М'який старт/стоп для польоту камери (а не лінійно): ease-in-out cubic.
+function easeInOutCubic(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
 type Mode = 'points' | 'clusters';
 type LabelMode = 'none' | 'oblast' | 'all';
 
@@ -171,8 +176,15 @@ export interface MapUkraineProps {
   showControls?: boolean;
   /** Публічний контекст: клік на місто → колбек (відкрити картку) замість навігації на /city. */
   onCitySelect?: (settlementId: string) => void;
+  /** Мапа сама плавно летить до міста на подію gramista:city (клік у топі/стрічці/мапі). Лише публічна сторінка. */
+  flyToSelectedCity?: boolean;
   /** Показувати шар кордонів світу й дозволити віддалення (для стрімерів з abroadWorldMap). */
   world?: boolean;
+  /**
+   * Одиниця значення крапки в попапі: 'points' — бали (мапа стрімера, дефолт),
+   * 'uah' — гривні (глобальна мапа /ukraine, де в points закладено суму ₴).
+   */
+  valueUnit?: 'points' | 'uah';
 }
 
 export function MapUkraine({
@@ -181,12 +193,15 @@ export function MapUkraine({
   initialView = 'points',
   showControls = true,
   onCitySelect,
+  flyToSelectedCity = false,
   world = false,
+  valueUnit = 'points',
 }: MapUkraineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MlMap | null>(null);
   const mlRef = useRef<MaplibreModule | null>(null);
   const popupRef = useRef<MlPopup | null>(null);
+  const focusMarkerRef = useRef<MlMarker | null>(null);
   const readyRef = useRef(false);
   const [mode, setMode] = useState<Mode>(initialView);
   const [labels, setLabels] = useState<LabelMode>(initialLabels);
@@ -207,6 +222,8 @@ export function MapUkraine({
   interactiveRef.current = showControls;
   const onCitySelectRef = useRef(onCitySelect);
   onCitySelectRef.current = onCitySelect;
+  const valueUnitRef = useRef(valueUnit);
+  valueUnitRef.current = valueUnit;
   const worldRef = useRef(world);
   worldRef.current = world;
 
@@ -376,7 +393,9 @@ export function MapUkraine({
           const nameEl = document.createElement('strong');
           nameEl.textContent = name;
           const ptsEl = document.createElement('span');
-          ptsEl.textContent = `${formatPoints(pts)} ${pluralBaliv(pts)}`;
+          // /ukraine закладає в points суму ₴ — там показуємо гривні, не бали.
+          ptsEl.textContent =
+            valueUnitRef.current === 'uah' ? formatUahWhole(pts) : `${formatPoints(pts)} ${pluralBaliv(pts)}`;
           el.append(nameEl, ptsEl);
 
           // Публічний контекст: «деталі міста →» відкриває картку через колбек (без переходів).
@@ -519,6 +538,59 @@ export function MapUkraine({
       for (const m of active) m.remove(); // прибрати недограні маркери при розмонтуванні
     };
   }, []);
+
+  // Політ камери до обраного міста (клік у топі/стрічці/попапі мапи) — лише на публічній сторінці.
+  // flyTo з кривою ван Вейка (curve 1.42): зум+пан зливаються в плавну дугу, бере орієнтацію навіть
+  // на далекому переході. essential НЕ ставимо → flyTo сам поважає prefers-reduced-motion (миттєвий стрибок).
+  useEffect(() => {
+    if (!flyToSelectedCity) return;
+    const onCity = (e: Event) => {
+      const map = mapRef.current;
+      const ml = mlRef.current;
+      if (!map || !ml || !readyRef.current) return;
+      const id = (e as CustomEvent<{ settlementId: string }>).detail?.settlementId;
+      if (!id) return;
+      const p = pointsRef.current.find((pt) => pt.id === id);
+      if (!p) return; // міста нема на мапі (нема координат / закордон при вимкненій світ.мапі) — лишаємо камеру, картка все одно відкриється
+
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const w = map.getContainer().clientWidth;
+      const desktop = w >= 760;
+      map.flyTo({
+        center: [p.lon, p.lat],
+        zoom: Math.max(map.getZoom(), 6.5), // не віддаляємо, якщо вже ближче; інакше регіональний кадр
+        curve: 1.42,
+        speed: 0.85,
+        maxDuration: 2400,
+        easing: easeInOutCubic,
+        // Зсув центру праворуч-вгору: ліворуч плавають панелі, внизу-праворуч картка міста (десктоп).
+        offset: desktop ? [Math.min(w * 0.16, 170), -28] : [0, 0],
+      });
+
+      // Мобільний: мапа — блок зверху, список прокручений нижче. Піднімаємо мапу у в'юпорт.
+      if (!desktop) map.getContainer().scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+
+      // Пульс-підсвітка обраного міста (реюз стилю спалаху, без плашки-суми). Тримаємо один focus-маркер.
+      focusMarkerRef.current?.remove();
+      const el = document.createElement('div');
+      el.className = 'map-flash';
+      const ring = document.createElement('span');
+      ring.className = 'mf-ring';
+      el.append(ring);
+      const marker = new ml.Marker({ element: el, anchor: 'center' }).setLngLat([p.lon, p.lat]).addTo(map);
+      focusMarkerRef.current = marker;
+      window.setTimeout(() => {
+        marker.remove();
+        if (focusMarkerRef.current === marker) focusMarkerRef.current = null;
+      }, 1500); // = тривалість анімації mf-ring
+    };
+    window.addEventListener('gramista:city', onCity);
+    return () => {
+      window.removeEventListener('gramista:city', onCity);
+      focusMarkerRef.current?.remove();
+      focusMarkerRef.current = null;
+    };
+  }, [flyToSelectedCity]);
 
   const LABEL_OPTIONS: { value: LabelMode; label: string }[] = [
     { value: 'none', label: 'Без' },

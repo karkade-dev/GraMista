@@ -4,6 +4,7 @@ import { listCollections, collectionReportText, type CollectionRow } from '@/lib
 import { formatUah, formatDate, formatPoints } from '@/lib/format';
 import { ConfirmSubmit } from '@/app/ConfirmSubmit';
 import { CopyButton } from '@/app/CopyButton';
+import { ReportExport } from '@/app/(panel)/streams/[id]/ReportExport';
 import {
   createCollectionAction,
   updateCollectionAction,
@@ -100,10 +101,8 @@ function CollectionCard({ c }: { c: CollectionRow }) {
             <pre className="report-text">{report}</pre>
             <div className="report-actions">
               <CopyButton text={report} label="Копіювати звіт" />
-              <a href={`/collections/${c.id}/report-image`} target="_blank" rel="noopener" className="btn-img">
-                🖼 Картинка звіту
-              </a>
             </div>
+            <ReportExport basePath={`/collections/${c.id}/report-image`} />
           </div>
         </details>
 

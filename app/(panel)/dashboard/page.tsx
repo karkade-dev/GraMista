@@ -13,7 +13,8 @@ import { MapUkraine } from '@/app/MapUkraine';
 import { OvertakeWatcher } from '@/app/OvertakeWatcher';
 import { ReassignCityCell } from '@/app/ReassignCityCell';
 import { CityAutocomplete } from '@/app/CityAutocomplete';
-import { assignCityAction, reassignCityAction } from '@/app/(panel)/admin/actions';
+import { TeachableComment } from '@/app/TeachableComment';
+import { assignCityAction, reassignCityAction, rememberSpellingAction } from '@/app/(panel)/admin/actions';
 import { moveDonationToCollectionAction } from '@/app/(panel)/collections/actions';
 
 // Живі дані — рендеримо на кожен запит (без статичної генерації на білді).
@@ -80,7 +81,7 @@ export default async function Dashboard({
   const [state, cities, donationCount, tiles, collectionOptions, profile, monoSource] = await Promise.all([
     getState(prisma, U, window, { streamId, collectionId, audience: 'admin' }),
     leaderboard(prisma, U, lbFilter),
-    prisma.donation.count({ where: donWhere }),
+    prisma.donation.count({ where: { ...donWhere, outOfGame: false } }),
     dashboardTiles(prisma, U),
     listCollectionOptions(prisma, U),
     prisma.user.findUnique({ where: { id: U }, select: { handle: true } }),
@@ -298,16 +299,17 @@ export default async function Dashboard({
             ) : (
               state.recent.map((d) => {
                 const muted = d.city == null || d.points === 0;
-                const badge =
-                  d.points > 0 ? (
-                    <span className="badge add">
-                      ＋ {formatPoints(d.points)} {pluralBaliv(d.points)} місту
-                    </span>
-                  ) : d.city ? (
-                    <span className="badge pot">🫙 у скарбничку міста</span>
-                  ) : (
-                    <span className="badge none">місто не розпізнане</span>
-                  );
+                const badge = d.outOfGame ? (
+                  <span className="badge none">поза грою</span>
+                ) : d.points > 0 ? (
+                  <span className="badge add">
+                    ＋ {formatPoints(d.points)} {pluralBaliv(d.points)} місту
+                  </span>
+                ) : d.city ? (
+                  <span className="badge pot">🫙 у скарбничку міста</span>
+                ) : (
+                  <span className="badge none">місто не розпізнане</span>
+                );
                 const isBiggest = d.externalId === biggestId;
                 return (
                   <div className={`donate${isBiggest ? ' biggest' : ''}${d.newCity ? ' opener' : ''}`} key={d.externalId}>
@@ -322,7 +324,17 @@ export default async function Dashboard({
                         </span>
                         <span className="d-sum">+{formatUah(d.amountUah)}</span>
                       </div>
-                      {d.message && <div className="d-comment">«{oneLineComment(d.message)}»</div>}
+                      {d.message && (
+                        <div className="d-comment">
+                          <TeachableComment
+                            comment={oneLineComment(d.message)}
+                            settlementId={d.settlementId}
+                            city={d.city}
+                            action={rememberSpellingAction}
+                            quote
+                          />
+                        </div>
+                      )}
                       <div className="d-meta">
                         {d.city ? (
                           <ReassignCityCell

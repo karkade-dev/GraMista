@@ -8,6 +8,7 @@ const API = 'https://api.monobank.ua';
 const clientInfoSchema = z.object({
   jars: z.array(z.object({
     id: z.string(),
+    sendId: z.string(),
     title: z.string(),
     balance: z.number(),
   })).optional(),
@@ -15,8 +16,19 @@ const clientInfoSchema = z.object({
 
 export interface MonoJar {
   id: string;
+  sendId: string;
   title: string;
   balanceUah: number;
+}
+
+/**
+ * Публічне посилання «задонатити» банки з її sendId (єдине місце, де знається формат).
+ * monobank віддає sendId уже з сегментом `jar/` (напр. `jar/AaiGcJQA8N`), тож БАЗУ додаємо
+ * без `jar/`, інакше вийде `.../jar/jar/...`. Захищаємось від зайвого слеша / повного URL.
+ */
+export function jarUrlFromSendId(sendId: string): string {
+  const id = sendId.trim().replace(/^https?:\/\/send\.monobank\.ua\//i, '').replace(/^\/+/, '');
+  return `https://send.monobank.ua/${id}`;
 }
 
 export class MonoApiError extends Error {
@@ -40,7 +52,7 @@ async function monoFetch(path: string, token: string, init?: RequestInit): Promi
 export async function fetchJars(token: string): Promise<MonoJar[]> {
   const res = await monoFetch('/personal/client-info', token);
   const info = clientInfoSchema.parse(await res.json());
-  return (info.jars ?? []).map((j) => ({ id: j.id, title: j.title, balanceUah: j.balance / 100 }));
+  return (info.jars ?? []).map((j) => ({ id: j.id, sendId: j.sendId, title: j.title, balanceUah: j.balance / 100 }));
 }
 
 /** Реєструє вебхук; monobank одразу валідує URL GET-запитом (має віддати 200). */

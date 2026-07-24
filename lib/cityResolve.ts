@@ -1,6 +1,7 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { normalize } from './text';
 import { CITY_STOP_FORMS } from './cityStopForms';
+import { detectOblastHints } from './oblastHints';
 
 export interface CityMatch {
   settlementId: string;
@@ -27,35 +28,8 @@ const FUZZY_CANDIDATES = 5;
 const AGGRESSOR = ['RU', 'BY'];
 
 // Підказка області в коментарі («Іванівка Сумська», «з Іванівки на Сумщині») — розвʼязує тезок.
-// Стеми нормалізовані; перевірка — слово починається зі стема. Хибна підказка НЕшкідлива:
-// вона лише фільтрує вже знайдених кандидатів і ніколи не додає нових (нема тезок — нема ефекту).
-const OBLAST_HINT_STEMS: ReadonlyArray<readonly [string, string]> = [
-  ['вінницьк', 'Вінницька'], ['вінниччин', 'Вінницька'],
-  ['волинськ', 'Волинська'], ['волин', 'Волинська'],
-  ['дніпропетровськ', 'Дніпропетровська'], ['дніпропетровщин', 'Дніпропетровська'],
-  ['донецьк', 'Донецька'], ['донеччин', 'Донецька'],
-  ['житомирськ', 'Житомирська'], ['житомирщин', 'Житомирська'],
-  ['закарпатськ', 'Закарпатська'], ['закарпатт', 'Закарпатська'],
-  ['запорізьк', 'Запорізька'],
-  ['франківськ', 'Івано-Франківська'], ['франківщин', 'Івано-Франківська'], ['прикарпатт', 'Івано-Франківська'],
-  ['київськ', 'Київська'], ['київщин', 'Київська'],
-  ['кіровоградськ', 'Кіровоградська'], ['кіровоградщин', 'Кіровоградська'],
-  ['луганськ', 'Луганська'], ['луганщин', 'Луганська'],
-  ['львівськ', 'Львівська'], ['львівщин', 'Львівська'],
-  ['миколаївськ', 'Миколаївська'], ['миколаївщин', 'Миколаївська'],
-  ['одеськ', 'Одеська'], ['одещин', 'Одеська'],
-  ['полтавськ', 'Полтавська'], ['полтавщин', 'Полтавська'],
-  ['рівненськ', 'Рівненська'], ['рівненщин', 'Рівненська'],
-  ['сумськ', 'Сумська'], ['сумщин', 'Сумська'],
-  ['тернопільськ', 'Тернопільська'], ['тернопільщин', 'Тернопільська'],
-  ['харківськ', 'Харківська'], ['харківщин', 'Харківська'],
-  ['херсонськ', 'Херсонська'], ['херсонщин', 'Херсонська'],
-  ['хмельницьк', 'Хмельницька'], ['хмельниччин', 'Хмельницька'],
-  ['черкаськ', 'Черкаська'], ['черкащин', 'Черкаська'],
-  ['чернівецьк', 'Чернівецька'], ['буковин', 'Чернівецька'],
-  ['чернігівськ', 'Чернігівська'], ['чернігівщин', 'Чернігівська'],
-  ['кримськ', 'Автономна Республіка Крим'], ['крим', 'Автономна Республіка Крим'],
-];
+// Хибна підказка НЕшкідлива: вона лише фільтрує вже знайдених кандидатів і ніколи не додає нових
+// (нема тезок — нема ефекту). Стеми/детектор — спільні з пошуком пікера (lib/oblastHints).
 
 // Стоп-правило для назв-звичайних-слів (Добре, Веселе, Надія… — список згенеровано з ВЕСУМ):
 // малі НП з такою назвою отримують бали ЛИШЕ з маркером «село/місто…» перед назвою або
@@ -94,19 +68,6 @@ function passesStopRule(
     if (prev !== undefined && MARKER_FORMS.has(prev)) return true;
   }
   return false;
-}
-
-function detectOblastHints(words: string[]): Set<string> {
-  const hints = new Set<string>();
-  for (const w of words) {
-    for (const [stem, oblast] of OBLAST_HINT_STEMS) {
-      if (w.startsWith(stem)) {
-        hints.add(oblast);
-        break;
-      }
-    }
-  }
-  return hints;
 }
 
 type Cand = { id: string; name: string; form: string; population: number; oblast: string | null; country: string };
@@ -151,7 +112,7 @@ function pickBest(cands: Cand[], hints: Set<string>): Cand | null {
 export async function resolveCity(
   db: PrismaClient,
   message: string,
-  opts: { abroad?: boolean; hideAggressor?: boolean } = {},
+  opts: { abroad?: boolean; hideAggressor?: boolean; userId?: string } = {},
 ): Promise<CityMatch | null> {
   const norm = normalize(message);
   if (!norm) return null;
@@ -166,6 +127,15 @@ export async function resolveCity(
       ? { country: { notIn: AGGRESSOR } }
       : {};
 
+  // Власник аліаса (мультитенант): спільні (userId=null) + лише приватні цього стрімера; без
+  // userId — лише спільні. Дія одного стрімера не впливає на інших. Те саме правило у fuzzy нижче.
+  const aliasOwner: Prisma.SettlementAliasWhereInput = opts.userId
+    ? { OR: [{ userId: null }, { userId: opts.userId }] }
+    : { userId: null };
+  const aliasUserSql = opts.userId
+    ? Prisma.sql`AND (a."userId" IS NULL OR a."userId" = ${opts.userId})`
+    : Prisma.sql`AND a."userId" IS NULL`;
+
   const ngrams: string[] = [];
   for (let n = 1; n <= 4; n++) {
     for (let i = 0; i + n <= words.length; i++) ngrams.push(words.slice(i, i + n).join(' '));
@@ -178,7 +148,7 @@ export async function resolveCity(
       select: { id: true, name: true, nameNorm: true, population: true, oblast: true, country: true },
     }),
     db.settlementAlias.findMany({
-      where: { aliasNorm: { in: ngrams }, settlement: countryWhere },
+      where: { aliasNorm: { in: ngrams }, settlement: countryWhere, ...aliasOwner },
       select: { aliasNorm: true, settlement: { select: { id: true, name: true, population: true, oblast: true, country: true } } },
     }),
   ]);
@@ -219,6 +189,7 @@ export async function resolveCity(
         JOIN "SettlementAlias" a ON a."aliasNorm" % w.q
         WHERE length(a."aliasNorm") >= ${MIN_FUZZY_FORM_LEN}
           AND abs(length(a."aliasNorm") - length(w.q)) <= ${MAX_FUZZY_LEN_DIFF}
+          ${aliasUserSql}
         UNION ALL
         SELECT s2.id, s2."nameNorm", w.q, similarity(s2."nameNorm", w.q)
         FROM unnest(ARRAY[${Prisma.join(qs)}]::text[]) AS w(q)

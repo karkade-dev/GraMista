@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/db';
 import { requireUserId } from '@/lib/session';
-import { assignCity, assignCityBulk, reassignCity, adjustPoints, resetCity, resetAll } from '@/lib/admin';
+import { assignCity, assignCityBulk, reassignCity, adjustPoints, resetCity, resetAll, setDonationOutOfGame } from '@/lib/admin';
 import { addAlias } from '@/lib/settlements';
 import { undoAdminAction } from '@/lib/adminLog';
 import { notifyDonation, notifyRefresh } from '@/lib/notify';
@@ -41,6 +41,35 @@ export async function reassignCityAction(formData: FormData): Promise<void> {
   await reassignCity(prisma, U, externalId, settlementId);
   revalidatePath('/', 'layout');
   await notifyDonation(prisma, U, externalId); // спалах нового міста; старе оновиться на refresh
+}
+
+const SetGameInput = z.object({ externalId: z.string().min(1), out: z.enum(['true', 'false']) });
+
+/** Вивести донат з гри / повернути в гру (поштучно). Перераховує бали + ховає/показує глядачам наживо. */
+export async function setDonationGameAction(formData: FormData): Promise<void> {
+  const U = await requireUserId();
+  const { externalId, out } = SetGameInput.parse({
+    externalId: formData.get('externalId'),
+    out: formData.get('out'),
+  });
+  await setDonationOutOfGame(prisma, U, externalId, out === 'true');
+  revalidatePath('/', 'layout');
+  await notifyDonation(prisma, U, externalId); // спалах гасне/зʼявляється, стрічка/сума глядачів оновлюються
+}
+
+const RememberInput = z.object({ settlementId: z.string().min(1), alias: z.string().trim().min(1).max(64) });
+
+/**
+ * Запам'ятати написання з коментаря як ПРИВАТНИЙ синонім міста (клік по слову в стрічці/доку).
+ * Кличе addAlias (приватний для стрімера, журналюється з відкатом). Без revalidatePath — синонім
+ * впливає на МАЙБУТНІ донати (resolveCity читає БД наживо), поточні екрани не змінюються.
+ */
+export async function rememberSpellingAction(settlementId: string, alias: string): Promise<{ ok: boolean }> {
+  const U = await requireUserId();
+  const parsed = RememberInput.safeParse({ settlementId, alias });
+  if (!parsed.success) return { ok: false };
+  const res = await addAlias(prisma, U, parsed.data.settlementId, parsed.data.alias);
+  return { ok: res !== null };
 }
 
 const BulkAssignInput = z.object({
@@ -82,7 +111,7 @@ const AliasInput = z.object({
   alias: z.string().trim().min(2, 'Синонім закороткий').max(64),
 });
 
-/** Додати ручний синонім місту (надалі авто-розпізнається; для живих донатів — після перезапуску інжесту). */
+/** Додати ПРИВАТНИЙ синонім місту (видно лише цьому стрімеру; надалі його донати з цим написанням авто-розпізнаються — резолвер читає БД наживо). */
 export async function addAliasAction(formData: FormData): Promise<void> {
   const U = await requireUserId();
   const { settlementId, alias } = AliasInput.parse({

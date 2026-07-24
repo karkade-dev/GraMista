@@ -245,3 +245,14 @@ test('worldCities: місто без української назви — пр�
   const out = buildWorldSettlements(cities, '');
   assert.equal(out.length, 0);
 });
+
+test('worldCities: українські міста (country=UA) пропускаються — їх покриває КАТОТТГ, без дублів g<id>', () => {
+  const cities = [
+    '703448\tKyiv\tKyiv\tKyiv\t50.45\t30.52\tP\t\tUA\t\t\t\t\t\t2884000',
+    '756135\tWarsaw\tWarsaw\tWarszawa\t52.23\t21.01\tP\t\tPL\t\t\t\t\t\t1790658',
+  ].join('\n');
+  const altNames = ['1\t703448\tuk\tКиїв\t1', '2\t756135\tuk\tВаршава\t1'].join('\n');
+  const out = buildWorldSettlements(cities, altNames);
+  assert.equal(out.length, 1, 'лише іноземне місто; Київ (UA) пропущено');
+  assert.equal(out[0]?.country, 'PL');
+});

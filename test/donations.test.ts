@@ -69,6 +69,17 @@ test('keyset-пагінація: 30/стор., next/prev курсори, рух 
   assert.equal(back.rows[29]?.externalId, 'd5');
 });
 
+test('DonationRow.settlementId: розпізнаний має id міста, нерозпізнаний — null (для навчання синоніму)', async () => {
+  await applyDonation(testDb, U, { externalId: 'rec', donorName: 'A', amountUah: 100, message: 'Київ' }, 'kyiv');
+  await testDb.donation.create({
+    data: { userId: U, externalId: 'unr', donorName: 'B', amount: 50, message: 'хз', status: 'unrecognized' },
+  });
+  const p = await listDonations(testDb, U, {});
+  const byId = Object.fromEntries(p.rows.map((r) => [r.externalId, r]));
+  assert.equal(byId['rec']?.settlementId, 'kyiv');
+  assert.equal(byId['unr']?.settlementId, null);
+});
+
 test('keyset за сумою: desc/asc + пагінація вперед-назад', async () => {
   await seedSeq(35); // amount = 100+i (унікальні): d0=100 … d34=134
 
@@ -128,7 +139,33 @@ test('пошук за іменем донатера — регістронеза
   const res = await listDonations(testDb, U, { search: 'дмитро' });
   assert.equal(res.rows.length, 1);
   assert.equal(res.rows[0]?.externalId, 'a');
-  assert.equal(res.rows[0]?.who, 'Дмитро П.'); // назовні — анонімізовано
+  assert.equal(res.rows[0]?.who, 'Дмитро Петренко'); // приватна панель — повне ім'я (= те, за чим шукаємо)
+
+  // Пошук за прізвищем (його видно в колонці, бо ім'я повне) — теж знаходить.
+  const bySurname = await listDonations(testDb, U, { search: 'петренко' });
+  assert.equal(bySurname.rows.length, 1);
+  assert.equal(bySurname.rows[0]?.externalId, 'a');
+});
+
+test('пошук знаходить і фразу в коментарі донату', async () => {
+  await testDb.donation.create({
+    data: { userId: U, externalId: 'a', donorName: 'Дмитро Петренко', amount: 200, message: 'Слава Україні з Полтави!', status: 'unrecognized' },
+  });
+  await testDb.donation.create({
+    data: { userId: U, externalId: 'b', donorName: 'Іван Сидоренко', amount: 200, message: 'привіт стріму', status: 'unrecognized' },
+  });
+
+  // Фраза є лише в коментарі — донатер з таким ім'ям відсутній.
+  const byPhrase = await listDonations(testDb, U, { search: 'з полтави' });
+  assert.deepEqual(byPhrase.rows.map((r) => r.externalId), ['a']);
+
+  // Пошук за іменем при цьому не зламався.
+  const byName = await listDonations(testDb, U, { search: 'сидоренко' });
+  assert.deepEqual(byName.rows.map((r) => r.externalId), ['b']);
+
+  // Збіг і в імені, і в коментарі іншого донату — обидва рядки, без дублів.
+  const both = await listDonations(testDb, U, { search: 'і' });
+  assert.equal(both.rows.length, 2);
 });
 
 test('фільтр діапазону суми (від–до)', async () => {
@@ -199,14 +236,16 @@ test('donationsToCsv — BOM, заголовок, екранування ком�
   const rows: DonationRow[] = [
     {
       externalId: 'x',
-      who: 'Дмитро П.',
+      who: 'Дмитро Петренко',
       amountUah: 500,
       message: 'привіт, "Київ"\nдякую',
       city: 'Київ',
+      settlementId: 'kyiv',
       status: 'recognized',
       points: 5,
       at: BASE,
       streamId: null,
+      outOfGame: false,
     },
   ];
   const csv = donationsToCsv(rows);

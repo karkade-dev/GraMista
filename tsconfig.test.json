@@ -12,7 +12,9 @@
     "isolatedModules": true,
     "moduleDetection": "force",
     "types": ["node"],
-    "noEmit": true
+    "noEmit": true,
+    "jsx": "preserve",
+    "paths": { "@/*": ["./*"] }
   },
   "include": ["test", "lib", "src"]
 }

@@ -24,7 +24,9 @@ export async function GET(req: Request, ctx: { params: Promise<{ handle: string 
   // Місце/бали — у межах активного збору (поточне змагання); нема збору → за весь час.
   const col = await prisma.collection.findFirst({ where: { userId, status: 'active' }, select: { id: true } });
   const [hits, rows] = await Promise.all([
-    searchSettlements(prisma, parsed.data, 5),
+    // userId власника handle → глядач бачить і приватні синоніми цього стрімера (це його змагання).
+    // 15 (а не 5): тезок з однаковою назвою десятки; глядач має знайти своє село (область у запиті звужує).
+    searchSettlements(prisma, parsed.data, 15, userId),
     leaderboard(prisma, userId, { limit: 100_000, ...(col ? { collectionId: col.id } : {}) }),
   ]);
   const byId = new Map(rows.map((r, i) => [r.settlementId, { place: i + 1, points: r.points }]));

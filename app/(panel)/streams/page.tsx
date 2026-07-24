@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/db';
 import { requireUserId } from '@/lib/session';
-import { getStreams, getCombined, streamComparison, type StreamSummary } from '@/lib/streams';
+import { getStreams, getCombined, streamComparison, streamReportText, type StreamSummary } from '@/lib/streams';
 import { formatUah, formatPoints, formatDateTime, formatDuration, pluralBaliv } from '@/lib/format';
+import { CopyButton } from '@/app/CopyButton';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Стріми' };
@@ -136,6 +137,18 @@ export default async function StreamsPage({ searchParams }: { searchParams: Prom
                         ))
                       )}
                     </div>
+                    <details className="edit-details">
+                      <summary>📋 Звіт</summary>
+                      <div className="report-box">
+                        <pre className="report-text">{streamReportText(s)}</pre>
+                        <div className="report-actions">
+                          <CopyButton text={streamReportText(s)} label="Копіювати звіт" />
+                          <a href={`/streams/${s.id}/report-image`} target="_blank" rel="noopener" className="btn-img">
+                            🖼 Картинка звіту
+                          </a>
+                        </div>
+                      </div>
+                    </details>
                   </div>
                   <div className="stream-stats">
                     <div className="ss sum">{formatUah(s.sumUah)}</div>

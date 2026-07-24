@@ -12,7 +12,7 @@ const U = DEFAULT_USER_ID;
 
 // Хелпер для чистого тесту biggestRecentId (без БД).
 function rec(externalId: string, amountUah: number, at: number): RecentItem {
-  return { externalId, who: 'X', amountUah, message: '', city: null, points: 0, at, collectionId: null, newCity: false, abroad: false };
+  return { externalId, who: 'X', amountUah, message: '', city: null, settlementId: null, points: 0, at, collectionId: null, newCity: false, abroad: false, outOfGame: false };
 }
 
 test('biggestRecentId: порожня стрічка → null', () => {
@@ -70,6 +70,7 @@ test('getState: вікно періоду скоупить суму, топ і �
   assert.deepEqual(week.leaderboard.map((r) => r.settlementId), ['lviv']);
   assert.equal(week.recent.length, 1);
   assert.equal(week.recent[0]?.externalId, 'new1');
+  assert.equal(week.recent[0]?.settlementId, 'lviv'); // id міста — для навчання синоніму кліком
 });
 
 test('getState({streamId}): скоуп за стрімом — лише донати/бали/стрічка/мапа цього стріму', async () => {
@@ -159,6 +160,38 @@ test('cityDetail: бали, к-сть, сума, останні донати, т
   // топ-донатер — Анна (700 разом), анонімно
   assert.equal(d.topDonors[0]!.who, 'Анна К.');
   assert.equal(d.topDonors[0]!.totalUah, 700);
+});
+
+test('cityDetail: topDonors групує повторного донатера (сума + к-сть)', async () => {
+  await applyDonation(testDb, U, { externalId: 'gd1', donorName: 'Єгор Шевченко', amountUah: 1488, message: 'Київ' }, 'kyiv');
+  await applyDonation(testDb, U, { externalId: 'gd2', donorName: 'Єгор Шевченко', amountUah: 100, message: 'Київ' }, 'kyiv');
+  await applyDonation(testDb, U, { externalId: 'gd3', donorName: 'Єгор Шевченко', amountUah: 1488, message: 'Київ' }, 'kyiv');
+  await applyDonation(testDb, U, { externalId: 'gd4', donorName: 'Олег Дуб', amountUah: 500, message: 'Київ' }, 'kyiv');
+
+  const d = await cityDetail(testDb, U, 'kyiv');
+  assert.ok(d);
+  // Єгор — ОДИН згрупований рядок: 3 донати разом, сума 3076 (а не три окремі)
+  assert.equal(d.topDonors[0]!.who, 'Єгор Ш.');
+  assert.equal(d.topDonors[0]!.totalUah, 3076);
+  assert.equal(d.topDonors[0]!.count, 3);
+  // другий донатер — Олег, один донат
+  assert.equal(d.topDonors[1]!.who, 'Олег Д.');
+  assert.equal(d.topDonors[1]!.totalUah, 500);
+  assert.equal(d.topDonors[1]!.count, 1);
+});
+
+test('cityDetail: recent за замовч. обмежений 10; allRecent → повна історія', async () => {
+  for (let i = 0; i < 14; i++) {
+    await applyDonation(testDb, U, { externalId: `hist${i}`, donorName: `Донатер ${i}`, amountUah: 100, message: 'Київ' }, 'kyiv');
+  }
+  const capped = await cityDetail(testDb, U, 'kyiv');
+  assert.ok(capped);
+  assert.equal(capped.recent.length, 10);
+
+  const all = await cityDetail(testDb, U, 'kyiv', {}, { allRecent: true });
+  assert.ok(all);
+  assert.equal(all.recent.length, 14);
+  assert.equal(all.donations, 14);
 });
 
 test('cityDetail: неіснуюче місто → null', async () => {

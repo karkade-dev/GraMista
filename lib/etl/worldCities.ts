@@ -13,36 +13,45 @@ export interface WorldSettlement {
 
 const CYRILLIC = /[а-яіїєґ]/i;
 
-/** Українські й рос. кирилічні назви за geonameid з alternateNamesV2.txt (стрімиться рядково в проді). */
-function parseAltNames(tsv: string): Map<string, { uk: string[]; ruCyr: string[] }> {
-  const idx = new Map<string, { uk: string[]; ruCyr: string[] }>();
-  for (const line of tsv.split('\n')) {
-    if (!line) continue;
-    const c = line.split('\t');
-    const geoId = c[1];
-    const lang = c[2];
-    const name = (c[3] ?? '').trim();
-    if (!geoId || !name) continue;
-    const preferred = c[4] === '1';
-    let e = idx.get(geoId);
-    if (!e) { e = { uk: [], ruCyr: [] }; idx.set(geoId, e); }
-    if (lang === 'uk') { if (preferred) e.uk.unshift(name); else e.uk.push(name); }
-    else if (lang === 'ru' && CYRILLIC.test(name)) e.ruCyr.push(name);
-  }
+export type AltNameIndex = Map<string, { uk: string[]; ruCyr: string[] }>;
+
+/**
+ * Обробляє ОДИН рядок alternateNamesV2 у накопичувальний індекс. Стрімовий шлях: реальний файл
+ * (~740 МБ) перевищує ліміт рядка JS (~512 МБ), тож в імпорті читаємо його рядково (як ВЕСУМ),
+ * не цілим рядком — інакше readFileSync падає з ERR_STRING_TOO_LONG.
+ */
+export function addAltNameLine(idx: AltNameIndex, line: string): void {
+  if (!line) return;
+  const c = line.split('\t');
+  const geoId = c[1];
+  const lang = c[2];
+  const name = (c[3] ?? '').trim();
+  if (!geoId || !name) return;
+  const preferred = c[4] === '1';
+  let e = idx.get(geoId);
+  if (!e) { e = { uk: [], ruCyr: [] }; idx.set(geoId, e); }
+  if (lang === 'uk') { if (preferred) e.uk.unshift(name); else e.uk.push(name); }
+  else if (lang === 'ru' && CYRILLIC.test(name)) e.ruCyr.push(name);
+}
+
+/** Українські й рос. кирилічні назви за geonameid (цілим рядком — для тестів/малих входів). */
+function parseAltNames(tsv: string): AltNameIndex {
+  const idx: AltNameIndex = new Map();
+  for (const line of tsv.split('\n')) addAltNameLine(idx, line);
   return idx;
 }
 
 /**
- * Будує іноземні Settlement-и з cities-файлу GeoNames (TSV) + alternateNamesV2.
- * Лишає ЛИШЕ міста, що мають українську назву (якісний фільтр кирилице-only підходу).
+ * Будує іноземні Settlement-и з cities-файлу GeoNames (TSV-рядок, ~8 МБ — ок цілим) + ГОТОВОГО
+ * alt-індексу. Лишає ЛИШЕ міста, що мають українську назву (якісний фільтр кирилице-only підходу).
  */
-export function buildWorldSettlements(citiesTsv: string, altNamesTsv: string): WorldSettlement[] {
-  const alt = parseAltNames(altNamesTsv);
+export function buildWorldFromIndex(citiesTsv: string, alt: AltNameIndex): WorldSettlement[] {
   const out: WorldSettlement[] = [];
   for (const line of citiesTsv.split('\n')) {
     if (!line) continue;
     const c = line.split('\t');
     if (c[6] !== 'P') continue; // лише населені пункти
+    if ((c[8] ?? '').trim() === 'UA') continue; // українські НП покриває КАТОТТГ — не дублюємо g<id>
     const geoId = c[0];
     const names = geoId ? alt.get(geoId) : undefined;
     if (!names || names.uk.length === 0) continue; // нема укр. назви — пропускаємо
@@ -64,4 +73,9 @@ export function buildWorldSettlements(citiesTsv: string, altNamesTsv: string): W
     });
   }
   return out;
+}
+
+/** Зручна обгортка: alt-назви цілим рядком (тести/малі входи). Для великого файлу — buildWorldFromIndex. */
+export function buildWorldSettlements(citiesTsv: string, altNamesTsv: string): WorldSettlement[] {
+  return buildWorldFromIndex(citiesTsv, parseAltNames(altNamesTsv));
 }

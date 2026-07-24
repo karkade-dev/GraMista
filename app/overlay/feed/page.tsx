@@ -32,7 +32,7 @@ export default async function FeedOverlay({ searchParams }: { searchParams: SP }
     scope = col ? { collectionId: col.id } : {};
   }
   const window = cfg.period === 'stream' || cfg.period === 'collection' ? {} : windowFor(cfg.period as Range);
-  const state = await getState(prisma, U, window, scope);
+  const state = await getState(prisma, U, window, { ...scope, audience: 'viewer' });
   const recent = state.recent;
 
   return (

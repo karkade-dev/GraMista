@@ -17,6 +17,8 @@ export interface UnrecognizedItem {
   amountUah: number;
   message: string;
   at: number;
+  /** Поза грою: призначення міста НЕ поверне його в гру (липке виключення) — показуємо мітку. */
+  outOfGame: boolean;
 }
 
 export const UNRECOGNIZED_PER_PAGE = 50;
@@ -57,6 +59,7 @@ export async function getUnrecognized(
       amountUah: d.amount.toNumber(),
       message: d.message,
       at: d.createdAt.getTime(),
+      outOfGame: d.outOfGame,
     })),
     total,
   };
@@ -78,7 +81,11 @@ async function assignCityTx(
   const settlement = await tx.settlement.findUnique({ where: { id: settlementId }, select: { id: true } });
   if (!settlement) return null;
 
-  const { awarded } = await creditPool(tx, userId, d.donorName, settlementId, d.amount, d.streamId, d.id, d.collectionId);
+  // Виключення з гри — липке: виключеному донату місто записуємо без балів,
+  // доки його явно не повернуть кнопкою «у гру».
+  const awarded = d.outOfGame
+    ? new Prisma.Decimal(0)
+    : (await creditPool(tx, userId, d.donorName, settlementId, d.amount, d.streamId, d.id, d.collectionId)).awarded;
   await tx.donation.update({
     where: { id: d.id },
     data: { status: 'recognized', settlementId, pointsAwarded: awarded },
@@ -147,6 +154,42 @@ export async function reassignCity(
 
     const moved = await tx.donation.findUniqueOrThrow({ where: { id: d.id }, select: { pointsAwarded: true } });
     return { ok: true, points: moved.pointsAwarded.toNumber() };
+  });
+}
+
+/**
+ * Вивести донат з гри (value=true) або повернути (false): перемикає outOfGame і, якщо донат має
+ * місто, ПЕРЕРАХОВУЄ пару «донатер+місто» (replay із порогом). Виведений донат балів не дає й
+ * ховається від глядачів; повернутий — донараховується. Донат без міста просто ховається/
+ * показується (балів у нього немає). Атомарно; журналюється (оборотно).
+ * null — донату нема / позначка вже така.
+ */
+export async function setDonationOutOfGame(
+  db: PrismaClient,
+  userId: string,
+  externalId: string,
+  value: boolean,
+): Promise<{ ok: boolean; points: number } | null> {
+  return db.$transaction(async (tx) => {
+    const d = await tx.donation.findUnique({ where: { userId_externalId: { userId, externalId } } });
+    if (!d || d.outOfGame === value) return null;
+
+    await tx.donation.update({
+      where: { id: d.id },
+      data: { outOfGame: value, ...(value ? { pointsAwarded: new Prisma.Decimal(0) } : {}) },
+    });
+    if (d.settlementId) await recomputeDonorCityChain(tx, userId, d.donorName, d.settlementId, d.collectionId);
+
+    const cityLabel = d.settlementId ? `(місто «${await cityName(tx, d.settlementId)}»)` : '(без міста)';
+    await recordAdminAction(tx, userId, {
+      type: 'setDonationGame',
+      summary: value ? `Виведено донат з гри ${cityLabel}` : `Повернено донат у гру ${cityLabel}`,
+      payload: { externalId, from: String(!value), to: String(value), settlementId: d.settlementId },
+      undoable: true,
+    });
+
+    const after = await tx.donation.findUniqueOrThrow({ where: { id: d.id }, select: { pointsAwarded: true } });
+    return { ok: true, points: after.pointsAwarded.toNumber() };
   });
 }
 

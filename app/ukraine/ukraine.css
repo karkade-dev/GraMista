@@ -39,7 +39,8 @@
 }
 
 /* ── Шапка-бренд (сторінка СЕРВІСУ, не стрімера) ── */
-.ukr-hdr { top: 16px; left: 16px; display: flex; align-items: center; gap: 12px; padding: 11px 18px 11px 11px; z-index: 10; }
+.ukr-hdr { top: 16px; left: 16px; display: flex; align-items: center; gap: 12px; padding: 11px 18px 11px 11px; z-index: 10; text-decoration: none; color: inherit; transition: border-color .15s; }
+.ukr-hdr:hover { border-color: var(--u-accent); }
 .ukr-brand-mark {
   width: 42px; height: 42px; border-radius: 13px; display: grid; place-items: center; font-size: 21px;
   background: linear-gradient(150deg, var(--u-accent-soft), var(--u-accent-deep));

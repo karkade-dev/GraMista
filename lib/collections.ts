@@ -43,15 +43,18 @@ export interface CollectionRow {
   startAt: Date;
   endAt: Date | null;
   streamCount: number;
+  /** Топ-3 — чипи в списку зборів і картинка-банер. Зріз cities. */
   topCities: LeaderRow[];
+  /** Повний список міст збору з балами (без обмеження) — звіт-пост і drill-down. */
+  cities: LeaderRow[];
 }
 
-/** Підсумок збору: зібрано (донати з позначкою збору), відсоток цілі, топ-3 міста, к-сть стрімів. */
+/** Підсумок збору: зібрано (донати з позначкою збору), відсоток цілі, міста з балами, к-сть стрімів. */
 export async function collectionSummary(db: PrismaClient, userId: string, c: Collection): Promise<CollectionRow> {
-  const [agg, streamCount, topCities] = await Promise.all([
-    db.donation.aggregate({ where: { userId, collectionId: c.id }, _sum: { amount: true } }),
+  const [agg, streamCount, cities] = await Promise.all([
+    db.donation.aggregate({ where: { userId, collectionId: c.id, outOfGame: false }, _sum: { amount: true } }),
     db.stream.count({ where: { userId, collectionId: c.id } }),
-    leaderboard(db, userId, { collectionId: c.id, limit: 3 }),
+    leaderboard(db, userId, { collectionId: c.id, limit: null }),
   ]);
   const raisedUah = agg._sum.amount?.toNumber() ?? 0;
   const seedUah = c.seedUah?.toNumber() ?? 0;
@@ -72,7 +75,8 @@ export async function collectionSummary(db: PrismaClient, userId: string, c: Col
     startAt: c.startAt,
     endAt: c.endAt,
     streamCount,
-    topCities,
+    topCities: cities.slice(0, 3),
+    cities,
   };
 }
 
@@ -83,10 +87,9 @@ export function collectionReportText(c: CollectionRow): string {
     ? `💰 Зібрано ${formatUah(c.displayedUah)} з ${formatUah(c.goalUah)} (${pct}%)`
     : `💰 Зібрано ${formatUah(c.displayedUah)}`;
   const lines = [`🎯 ${c.name}`, sumLine];
-  if (c.topCities.length > 0) {
-    lines.push(
-      '🏆 Топ міст: ' + c.topCities.map((x, i) => `${i + 1}. ${x.name} (${formatPoints(x.points)})`).join(' · '),
-    );
+  if (c.cities.length > 0) {
+    lines.push('🏆 Міста збору:');
+    for (const [i, x] of c.cities.entries()) lines.push(`${i + 1}. ${x.name} — ${formatPoints(x.points)}`);
   }
   return lines.join('\n');
 }
@@ -156,8 +159,7 @@ export async function getCollection(
   const c = await db.collection.findFirst({ where: { id, userId } });
   if (!c) return null;
   const collection = await collectionSummary(db, userId, c);
-  const cities = await leaderboard(db, userId, { collectionId: c.id, limit: 200 });
-  return { collection, cities };
+  return { collection, cities: collection.cities };
 }
 
 /** Легкий перелік зборів для селекторів (прив'язка стріму до збору з вкладки Стріми). */
